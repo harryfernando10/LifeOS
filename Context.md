@@ -2,17 +2,17 @@
 
 **Purpose:** Living implementation state for agents and developers. Read this before writing code.
 
-**Last updated:** 2026-10-02 (Phase 4 complete)
+**Last updated:** 2026-10-02 (Phase 5 complete)
 
 ---
 
 ## Current Phase
 
-Phase 4 — Core LifeOS Data Model (complete)
+Phase 5 — Vault / Documents (complete)
 
 ## Status
 
-Phase 4 complete. Canonical domain entities and relations exist in Prisma/PostgreSQL. No Vault CRUD, uploads, or feature UIs yet. Phase 3 authentication remains intact.
+Phase 5 complete. Authenticated users can upload, list, view, update metadata, download, and delete private vault documents. Phase 3 authentication and Phase 4 data model remain intact. No schema migration was required.
 
 ## Completed
 
@@ -30,12 +30,18 @@ Phase 4 complete. Canonical domain entities and relations exist in Prisma/Postgr
   - Document → DocumentVersion (1:*)
   - Optional document links from Purchase (receipt), Renewal, Deadline
   - Migration `20261002092710_core_domain_model` (Phase 2/3 migrations preserved)
+- Phase 5 — Vault / Documents
+  - Private local file storage behind `FileStorageService`
+  - Document APIs with ownership enforcement
+  - Functional Vault UI (upload/list/detail/download/delete/metadata update)
+  - Baseline audit log entries for create/update/delete
+  - Focused vault security/ownership tests
 
 ## Next Task
 
-Phase 5 — Vault / Documents
+Phase 6 — Document Versioning
 
-Do not start Phase 5 until explicitly instructed.
+Do not start Phase 6 until explicitly instructed.
 
 ---
 
@@ -60,6 +66,11 @@ Copy env examples before first run:
 - `backend/.env.example` → `backend/.env`
 
 Required backend env: `DATABASE_URL`, `SESSION_SECRET` (min 32 characters). Never commit `.env` files.
+
+Optional vault env:
+
+- `PRIVATE_STORAGE_ROOT` (default `../private-storage` relative to backend cwd)
+- `MAX_UPLOAD_BYTES` (default `10485760` = 10 MiB)
 
 ---
 
@@ -90,7 +101,7 @@ Logout deletes the server session and clears the cookie.
 | Memberships | Represented as Subscription and/or RecurringPayment rows |
 | Warranty cardinality | At most one Warranty per Purchase (`purchaseId` unique) |
 | Document associations | Optional FKs: Purchase.receiptDocumentId; Renewal/Deadline.linkedDocumentId |
-| File storage | `DocumentVersion` / `InboxItem` storage metadata fields only; no uploads in Phase 4 |
+| File storage | `DocumentVersion` / `InboxItem` storage metadata fields only; uploads in Phase 5 |
 | Money | `Decimal(12,2)` with default currency `INR` |
 | Ownership | Direct `userId` on all listed user-owned models; DocumentVersion owned via Document |
 | Action Center / Timeline | Not stored entities — future derived queries |
@@ -111,31 +122,66 @@ Logout deletes the server session and clears the cookie.
 
 `20261002092710_core_domain_model`
 
+---
+
+## Phase 5 vault / documents decisions
+
+| Decision | Choice |
+| --- | --- |
+| Storage | Private local filesystem via `FileStorageService` abstraction (not PostgreSQL BLOBs; not Express static) |
+| Layout | `private-storage/{userId}/{documentId}/{versionId}` — storage key is relative; absolute paths never returned to clients |
+| Versioning (Phase 5) | Upload creates Document + DocumentVersion `versionNumber=1`, `isCurrent=true`. Download uses current version only |
+| Version history UI / replace | Intentionally deferred to Phase 6 |
+| File types | PDF, JPEG, PNG, WEBP (magic-byte detection + extension/MIME hints) |
+| Size limit | `MAX_UPLOAD_BYTES` env (default 10 MiB) |
+| Upload stack | `multer` memory storage → validate → store file → Prisma transaction; orphan file cleanup on DB failure |
+| Authorization | Every document query filters by `userId` from `req.authUser`; `assertOwnership` retained |
+| Categories | Existing Prisma `DocumentCategory` enum (no duplicated taxonomy) |
+| Audit | `DOCUMENT_CREATED`, `DOCUMENT_UPDATED`, `DOCUMENT_DELETED` |
+
+### Document API endpoints
+
+| Method | Path | Auth | Notes |
+| --- | --- | --- | --- |
+| GET | `/api/documents` | Yes | List current user's documents |
+| GET | `/api/documents/:id` | Yes | Get one owned document (+ current version metadata) |
+| POST | `/api/documents` | Yes | Multipart upload (`file` + metadata fields) |
+| PATCH | `/api/documents/:id` | Yes | Update metadata |
+| DELETE | `/api/documents/:id` | Yes | Delete document + versions + stored files |
+| GET | `/api/documents/:id/download` | Yes | Download current version bytes (attachment) |
+
 ### Intentionally deferred (later phases)
 
-- Document upload / private file serving (Phase 5)
-- Document versioning UX/replace flows (Phase 6)
-- Commitment/Purchase/Renewal/Deadline CRUD APIs and UI (Phases 7–9)
-- Action Center, Timeline, financial overview UI (Phases 10–12)
-- Search, Inbox product, AI, notifications delivery, Docker (later)
+- Document version history UI / replace flow (Phase 6)
+- OCR / AI extraction / receipt intelligence
+- Life Inbox processing
+- Global search / Ctrl+K / Action Center / Timeline / notifications
+- External cloud storage providers
+- Document sharing / public URLs
 
 ---
 
 ## Important files
 
-### Backend (Phase 3–4)
+### Backend (Phase 3–5)
 
-- `backend/prisma/schema.prisma` — auth + full core domain model
+- `backend/prisma/schema.prisma` — auth + full core domain model (unchanged in Phase 5)
 - `backend/prisma/migrations/20261002083250_init/` — Phase 2
 - `backend/prisma/migrations/20261002090909_auth_sessions/` — Phase 3
 - `backend/prisma/migrations/20261002092710_core_domain_model/` — Phase 4
-- `backend/src/types/domain.ts` — ownership conventions / Prisma type re-exports
-- `backend/src/domain/domainModel.test.ts` — relation/ownership model tests
+- `backend/src/services/fileStorageService.ts` — private storage abstraction
+- `backend/src/services/documentService.ts` — vault domain logic
+- `backend/src/controllers/documentController.ts` / `routes/documentRoutes.ts`
+- `backend/src/middleware/documentUpload.ts` — multer upload limits
+- `backend/src/utils/fileValidation.ts` — magic bytes / filename safety
+- `backend/src/documents/documents.test.ts` — Phase 5 tests
 - Auth stack unchanged: `authService`, `requireAuth`, `assertOwnership`, auth routes
 
 ### Frontend
 
-- Unchanged in Phase 4 (shell + real auth from Phase 1/3)
+- `frontend/src/api/documents.ts` — document API client
+- `frontend/src/pages/VaultPage.tsx` — functional Vault UI
+- `frontend/src/api/client.ts` — FormData-aware requests
 
 ## API endpoints
 
@@ -147,17 +193,19 @@ Logout deletes the server session and clears the cookie.
 | GET | `/api/auth/me` | Yes | Safe user profile |
 | GET | `/api/health` | No | Liveness (Phase 2) |
 | GET | `/api/ready` | No | DB readiness (Phase 2) |
-
-No domain CRUD endpoints in Phase 4.
+| GET | `/api/documents` | Yes | List documents |
+| GET | `/api/documents/:id` | Yes | Get document |
+| POST | `/api/documents` | Yes | Upload/create |
+| PATCH | `/api/documents/:id` | Yes | Update metadata |
+| DELETE | `/api/documents/:id` | Yes | Delete |
+| GET | `/api/documents/:id/download` | Yes | Download current file |
 
 ## Tests / checks performed
 
 - `npx prisma validate` — pass
-- `npx prisma migrate dev` (`core_domain_model`) — pass; DB synchronized
-- `npx prisma migrate status` — 3 migrations, up to date
-- `npx prisma generate` — pass
+- `npx prisma migrate status` — 3 migrations, up to date (no Phase 5 migration)
 - Backend `npm run typecheck` / `npm run build` — pass
-- Backend `npm test` — 15 pass (9 Phase 3 auth + 6 Phase 4 model)
+- Backend `npm test` — 24 pass (9 Phase 3 auth + 6 Phase 4 model + 9 Phase 5 vault)
 - Frontend `npm run typecheck` / `npm run build` — pass
 - `git diff --check` — run at commit time
 
@@ -167,7 +215,8 @@ No domain CRUD endpoints in Phase 4.
 - Phase 1: `feat: complete phase 1 - design system and application shell`
 - Phase 2: `feat: complete phase 2 - database foundation`
 - Phase 3: `feat: complete phase 3 - authentication and authorization`
-- Phase 4 commit expected: `feat: complete phase 4 - core LifeOS data model`
+- Phase 4: `feat: complete phase 4 - core LifeOS data model`
+- Phase 5 commit expected: `feat: complete phase 5 - vault and documents`
 - No remote configured; do not push unless explicitly requested
 
 ## Known issues / blockers
@@ -175,17 +224,20 @@ No domain CRUD endpoints in Phase 4.
 - Prisma may log expected unique-constraint errors for duplicate registration / duplicate warranty tests (handled)
 - CSRF tokens not yet implemented (SameSite=Lax baseline; Phase 19)
 - No email verification / password reset (intentionally deferred)
+- Version replace / history UX not implemented (Phase 6)
 
 ## Architectural decisions
 
 - Cool slate canvas + muted teal accent (Phase 1)
 - HTTP-only cookie sessions stored in PostgreSQL (Phase 3)
 - Explicit relational domain model without LifeItem inheritance (Phase 4)
+- Private filesystem storage behind a replaceable service abstraction (Phase 5)
+- Phase 5 creates only the current DocumentVersion needed for store/retrieve; full versioning UX is Phase 6
 - Inbox route remains a shell only until Phase 14
 
 ## Exact next phase
 
-**Phase 5 — Vault / Documents** (private upload/list/metadata/delete with ownership-checked file access)
+**Phase 6 — Document Versioning** (current version, previous versions, replace without losing history)
 
 ---
 
@@ -231,3 +283,4 @@ AI is a suggestion layer. Core app must work if AI is unavailable. AI must not a
 | 2026-10-02 | Phase 2 complete: PostgreSQL + Prisma, layered backend, health/ready. Next: Phase 3. |
 | 2026-10-02 | Phase 3 complete: bcrypt + HTTP-only session cookies, auth APIs, frontend wired, ownership foundation. Next: Phase 4 — Core LifeOS Data Model. |
 | 2026-10-02 | Phase 4 complete: core Prisma domain model + migration; no domain CRUD/UI. Next: Phase 5 — Vault / Documents. |
+| 2026-10-02 | Phase 5 complete: private vault upload/list/metadata/download/delete with ownership-checked storage. Next: Phase 6 — Document Versioning. |

@@ -58,3 +58,28 @@ export function getSessionMaxAgeMs(): number {
 export function isProduction(): boolean {
   return process.env.NODE_ENV === "production";
 }
+
+/**
+ * Absolute path to the private document storage root.
+ * Defaults to ../private-storage relative to the backend working directory.
+ */
+export function getPrivateStorageRoot(): string {
+  const configured = process.env.PRIVATE_STORAGE_ROOT?.trim();
+  if (configured) {
+    return configured;
+  }
+  return "../private-storage";
+}
+
+/** Maximum upload size in bytes (default 10 MiB). */
+export function getMaxUploadBytes(): number {
+  const raw = process.env.MAX_UPLOAD_BYTES;
+  if (!raw) {
+    return 10 * 1024 * 1024;
+  }
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return 10 * 1024 * 1024;
+  }
+  return Math.floor(parsed);
+}

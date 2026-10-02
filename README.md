@@ -8,7 +8,7 @@ Planning documents: `SRS.md`, `SDD.md`, `DEVELOPMENT_PLAN.md`, `Context.md`.
 
 ## Current status
 
-Phase 4 — Core LifeOS Data Model complete. Canonical domain entities exist in PostgreSQL/Prisma. Authentication works. No Vault CRUD or domain feature UIs yet (Phase 5+).
+Phase 5 — Vault / Documents complete. Authenticated users can manage private documents in the Vault. Authentication (Phase 3) and the core data model (Phase 4) remain intact.
 
 ## Prerequisites
 
@@ -56,7 +56,7 @@ npm run dev
 Frontend: http://localhost:5173  
 The Vite dev server proxies `/api` to the backend (cookies included).
 
-Open `/register` to create an account, then use `/app/*`. Sign out clears the server session.
+Open `/register` to create an account, then use `/app/vault` to upload sample documents. Sign out clears the server session.
 
 ## Checks
 
@@ -72,8 +72,20 @@ cd ../frontend && npm run typecheck && npm run build
 - `POST /api/auth/logout`
 - `GET /api/auth/me` (authenticated)
 
+## Documents API (Phase 5)
+
+- `GET /api/documents`
+- `GET /api/documents/:id`
+- `POST /api/documents` (multipart: `file` + metadata)
+- `PATCH /api/documents/:id`
+- `DELETE /api/documents/:id`
+- `GET /api/documents/:id/download`
+
+Allowed upload types: PDF, JPEG, PNG, WEBP. Default max size: 10 MiB (`MAX_UPLOAD_BYTES`).
+
 ## Notes
 
 - Do not commit `.env` files.
 - Do not store real personal documents in `private-storage/`.
-- Do not add Phase 5+ features until that phase is the current task.
+- Vault files are never publicly served; access is ownership-checked through the API.
+- Do not add Phase 6+ features until that phase is the current task.

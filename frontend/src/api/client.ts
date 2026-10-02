@@ -16,7 +16,7 @@ export class ApiRequestError extends Error {
   }
 }
 
-function getApiBaseUrl(): string {
+export function getApiBaseUrl(): string {
   return import.meta.env.VITE_API_BASE_URL || "/api";
 }
 
@@ -25,7 +25,9 @@ export async function apiRequest<T>(
   init: RequestInit = {},
 ): Promise<T> {
   const headers = new Headers(init.headers);
-  if (init.body && !headers.has("Content-Type")) {
+  const isFormData =
+    typeof FormData !== "undefined" && init.body instanceof FormData;
+  if (init.body && !isFormData && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
   }
 

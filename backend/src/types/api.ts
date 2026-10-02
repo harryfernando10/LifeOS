@@ -21,3 +21,27 @@ export type AuthUserResponseBody = {
     createdAt: string;
   };
 };
+
+export type DocumentVersionSummaryBody = {
+  id: string;
+  versionNumber: number;
+  originalFileName: string | null;
+  mimeType: string | null;
+  sizeBytes: number | null;
+  isCurrent: boolean;
+  uploadedAt: string;
+};
+
+export type DocumentResponseBody = {
+  id: string;
+  title: string;
+  category: string;
+  description: string | null;
+  status: string;
+  issuedOn: string | null;
+  expiresOn: string | null;
+  notes: string | null;
+  createdAt: string;
+  updatedAt: string;
+  currentVersion: DocumentVersionSummaryBody | null;
+};
