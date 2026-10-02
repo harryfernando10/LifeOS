@@ -1,6 +1,15 @@
 // LifeOS — Prisma schema
-// Phase 2: User foundation. Phase 3: auth fields + sessions.
-// Full domain model belongs in Phase 4.
+// Phase 2: User foundation
+// Phase 3: password hash + sessions
+// Phase 4: core domain model (entities/relations only; CRUD/UI in later phases)
+//
+// Design notes:
+// - Explicit tables per SDD (no forced LifeItem inheritance).
+// - Financial commitments overview is a derived query over Subscription +
+//   RecurringPayment — not a separate ledger table.
+// - Memberships are represented as Subscription and/or RecurringPayment rows.
+// - Document↔Purchase/Renewal/Deadline links use optional FKs (not polymorphic).
+// - File bytes are not stored here; DocumentVersion holds storage metadata for Phase 5+.
 
 generator client {
   provider = "prisma-client-js"
@@ -11,14 +20,103 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// ─── Enums ───────────────────────────────────────────────────────────────────
+
+enum DocumentCategory {
+  PASSPORT
+  NATIONAL_ID
+  TAX_ID
+  DRIVING_LICENCE
+  EDUCATION_ID
+  CERTIFICATE
+  INSURANCE
+  AGREEMENT
+  INVOICE
+  RECEIPT
+  OTHER
+}
+
+enum DocumentStatus {
+  ACTIVE
+  EXPIRED
+  ARCHIVED
+}
+
+enum BillingInterval {
+  WEEKLY
+  MONTHLY
+  QUARTERLY
+  YEARLY
+  CUSTOM
+}
+
+enum CommitmentStatus {
+  ACTIVE
+  PAUSED
+  CANCELLED
+}
+
+enum DeadlineStatus {
+  OPEN
+  COMPLETED
+  CANCELLED
+}
+
+enum RenewalKind {
+  PASSPORT
+  DRIVING_LICENCE
+  INSURANCE
+  DOMAIN
+  CERTIFICATION
+  MEMBERSHIP
+  LICENCE
+  OTHER
+}
+
+enum RenewalStatus {
+  UPCOMING
+  DUE
+  COMPLETED
+  CANCELLED
+}
+
+enum InboxItemStatus {
+  UNREVIEWED
+  CATEGORIZED
+  DISMISSED
+}
+
+enum NotificationType {
+  DEADLINE
+  RENEWAL
+  SUBSCRIPTION
+  RECURRING_PAYMENT
+  WARRANTY
+  DOCUMENT_EXPIRY
+  GENERAL
+}
+
+// ─── Auth (Phase 3) ──────────────────────────────────────────────────────────
+
 /// Authenticated account. Password is stored only as a bcrypt hash.
 model User {
-  id           String    @id @default(cuid())
-  email        String    @unique
-  passwordHash String    @map("password_hash")
-  createdAt    DateTime  @default(now()) @map("created_at")
-  updatedAt    DateTime  @updatedAt @map("updated_at")
-  sessions     Session[]
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  sessions          Session[]
+  documents         Document[]
+  subscriptions     Subscription[]
+  recurringPayments RecurringPayment[]
+  purchases         Purchase[]
+  warranties        Warranty[]
+  deadlines         Deadline[]
+  renewals          Renewal[]
+  inboxItems        InboxItem[]
+  notifications     Notification[]
+  auditLogs         AuditLog[]
 
   @@map("users")
 }
@@ -34,4 +132,250 @@ model Session {
   @@index([userId])
   @@index([expiresAt])
   @@map("sessions")
+}
+
+// ─── Vault / documents ───────────────────────────────────────────────────────
+
+/// Vault document metadata. File content lives in private storage (Phase 5).
+model Document {
+  id          String           @id @default(cuid())
+  userId      String           @map("user_id")
+  user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title       String
+  category    DocumentCategory @default(OTHER)
+  description String?
+  status      DocumentStatus   @default(ACTIVE)
+  issuedOn    DateTime?        @map("issued_on") @db.Date
+  expiresOn   DateTime?        @map("expires_on") @db.Date
+  notes       String?
+  createdAt   DateTime         @default(now()) @map("created_at")
+  updatedAt   DateTime         @updatedAt @map("updated_at")
+
+  versions         DocumentVersion[]
+  purchaseReceipts Purchase[]        @relation("PurchaseReceipt")
+  linkedRenewals   Renewal[]         @relation("RenewalDocument")
+  linkedDeadlines  Deadline[]        @relation("DeadlineDocument")
+
+  @@index([userId])
+  @@index([userId, category])
+  @@index([userId, expiresOn])
+  @@index([userId, status])
+  @@map("documents")
+}
+
+/// Version history foundation for a document (upload/replace in Phase 5–6).
+model DocumentVersion {
+  id               String    @id @default(cuid())
+  documentId       String    @map("document_id")
+  document         Document  @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  versionNumber    Int       @map("version_number")
+  storageKey       String?   @map("storage_key")
+  originalFileName String?   @map("original_file_name")
+  mimeType         String?   @map("mime_type")
+  sizeBytes        Int?      @map("size_bytes")
+  checksumSha256   String?   @map("checksum_sha256")
+  isCurrent        Boolean   @default(false) @map("is_current")
+  uploadedAt       DateTime  @default(now()) @map("uploaded_at")
+  replacedAt       DateTime? @map("replaced_at")
+  notes            String?
+
+  @@unique([documentId, versionNumber])
+  @@index([documentId])
+  @@index([documentId, isCurrent])
+  @@map("document_versions")
+}
+
+// ─── Commitments ─────────────────────────────────────────────────────────────
+
+/// Subscription / membership-style recurring commitment.
+model Subscription {
+  id              String           @id @default(cuid())
+  userId          String           @map("user_id")
+  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name            String
+  provider        String?
+  amount          Decimal?         @db.Decimal(12, 2)
+  currency        String           @default("INR")
+  billingInterval BillingInterval  @map("billing_interval")
+  nextBillingOn   DateTime?        @map("next_billing_on") @db.Date
+  status          CommitmentStatus @default(ACTIVE)
+  actionUrl       String?          @map("action_url")
+  notes           String?
+  createdAt       DateTime         @default(now()) @map("created_at")
+  updatedAt       DateTime         @updatedAt @map("updated_at")
+
+  @@index([userId])
+  @@index([userId, status])
+  @@index([userId, nextBillingOn])
+  @@map("subscriptions")
+}
+
+/// Recurring bill / rent / EMI-style payment commitment.
+model RecurringPayment {
+  id              String           @id @default(cuid())
+  userId          String           @map("user_id")
+  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name            String
+  payee           String?
+  amount          Decimal?         @db.Decimal(12, 2)
+  currency        String           @default("INR")
+  billingInterval BillingInterval  @map("billing_interval")
+  nextDueOn       DateTime?        @map("next_due_on") @db.Date
+  status          CommitmentStatus @default(ACTIVE)
+  actionUrl       String?          @map("action_url")
+  notes           String?
+  createdAt       DateTime         @default(now()) @map("created_at")
+  updatedAt       DateTime         @updatedAt @map("updated_at")
+
+  @@index([userId])
+  @@index([userId, status])
+  @@index([userId, nextDueOn])
+  @@map("recurring_payments")
+}
+
+// ─── Purchases / warranties ──────────────────────────────────────────────────
+
+model Purchase {
+  id                String    @id @default(cuid())
+  userId            String    @map("user_id")
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name              String
+  purchasedOn       DateTime  @map("purchased_on") @db.Date
+  amount            Decimal?  @db.Decimal(12, 2)
+  currency          String    @default("INR")
+  vendor            String?
+  notes             String?
+  receiptDocumentId String?   @unique @map("receipt_document_id")
+  receiptDocument   Document? @relation("PurchaseReceipt", fields: [receiptDocumentId], references: [id], onDelete: SetNull)
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  warranty Warranty?
+
+  @@index([userId])
+  @@index([userId, purchasedOn])
+  @@map("purchases")
+}
+
+/// One warranty per purchase (MVP cardinality). Ownership via userId (+ purchase).
+model Warranty {
+  id         String   @id @default(cuid())
+  userId     String   @map("user_id")
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  purchaseId String   @unique @map("purchase_id")
+  purchase   Purchase @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+  provider   String?
+  startsOn   DateTime? @map("starts_on") @db.Date
+  endsOn     DateTime  @map("ends_on") @db.Date
+  terms      String?
+  notes      String?
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @updatedAt @map("updated_at")
+
+  @@index([userId])
+  @@index([userId, endsOn])
+  @@map("warranties")
+}
+
+// ─── Renewals / deadlines ────────────────────────────────────────────────────
+
+model Deadline {
+  id               String         @id @default(cuid())
+  userId           String         @map("user_id")
+  user             User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title            String
+  dueOn            DateTime       @map("due_on") @db.Date
+  status           DeadlineStatus @default(OPEN)
+  actionUrl        String?        @map("action_url")
+  notes            String?
+  linkedDocumentId String?        @map("linked_document_id")
+  linkedDocument   Document?      @relation("DeadlineDocument", fields: [linkedDocumentId], references: [id], onDelete: SetNull)
+  createdAt        DateTime       @default(now()) @map("created_at")
+  updatedAt        DateTime       @updatedAt @map("updated_at")
+
+  @@index([userId])
+  @@index([userId, dueOn])
+  @@index([userId, status])
+  @@map("deadlines")
+}
+
+model Renewal {
+  id               String        @id @default(cuid())
+  userId           String        @map("user_id")
+  user             User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title            String
+  kind             RenewalKind   @default(OTHER)
+  dueOn            DateTime      @map("due_on") @db.Date
+  status           RenewalStatus @default(UPCOMING)
+  actionUrl        String?       @map("action_url")
+  notes            String?
+  linkedDocumentId String?       @map("linked_document_id")
+  linkedDocument   Document?     @relation("RenewalDocument", fields: [linkedDocumentId], references: [id], onDelete: SetNull)
+  createdAt        DateTime      @default(now()) @map("created_at")
+  updatedAt        DateTime      @updatedAt @map("updated_at")
+
+  @@index([userId])
+  @@index([userId, dueOn])
+  @@index([userId, kind])
+  @@index([userId, status])
+  @@map("renewals")
+}
+
+// ─── Inbox / notifications / audit (schema only; features later) ─────────────
+
+/// Dump-zone item for later categorization (Phase 14). Storage keys for Phase 5 patterns.
+model InboxItem {
+  id               String          @id @default(cuid())
+  userId           String          @map("user_id")
+  user             User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title            String?
+  originalFileName String?         @map("original_file_name")
+  storageKey       String?         @map("storage_key")
+  mimeType         String?         @map("mime_type")
+  sizeBytes        Int?            @map("size_bytes")
+  status           InboxItemStatus @default(UNREVIEWED)
+  notes            String?
+  createdAt        DateTime        @default(now()) @map("created_at")
+  updatedAt        DateTime        @updatedAt @map("updated_at")
+
+  @@index([userId])
+  @@index([userId, status])
+  @@map("inbox_items")
+}
+
+/// In-app notification record (delivery/scheduling in Phase 18).
+model Notification {
+  id               String           @id @default(cuid())
+  userId           String           @map("user_id")
+  user             User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type             NotificationType @default(GENERAL)
+  title            String
+  body             String?
+  /// Optional soft reference to a domain row (resolved in later phases).
+  relatedEntityType String?         @map("related_entity_type")
+  relatedEntityId   String?         @map("related_entity_id")
+  readAt           DateTime?        @map("read_at")
+  createdAt        DateTime         @default(now()) @map("created_at")
+
+  @@index([userId])
+  @@index([userId, readAt])
+  @@index([userId, createdAt])
+  @@map("notifications")
+}
+
+/// Significant action log (event catalog expands with features).
+model AuditLog {
+  id         String   @id @default(cuid())
+  userId     String   @map("user_id")
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  action     String
+  entityType String?  @map("entity_type")
+  entityId   String?  @map("entity_id")
+  metadata   Json?
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@index([userId])
+  @@index([userId, createdAt])
+  @@index([entityType, entityId])
+  @@map("audit_logs")
 }

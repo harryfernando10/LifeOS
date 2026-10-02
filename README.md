@@ -8,7 +8,7 @@ Planning documents: `SRS.md`, `SDD.md`, `DEVELOPMENT_PLAN.md`, `Context.md`.
 
 ## Current status
 
-Phase 3 — Authentication + Authorization complete. Register, login, logout, and protected `/app/*` routes use real HTTP-only session cookies against PostgreSQL. No domain CRUD yet (Phase 4+).
+Phase 4 — Core LifeOS Data Model complete. Canonical domain entities exist in PostgreSQL/Prisma. Authentication works. No Vault CRUD or domain feature UIs yet (Phase 5+).
 
 ## Prerequisites
 
@@ -76,4 +76,4 @@ cd ../frontend && npm run typecheck && npm run build
 
 - Do not commit `.env` files.
 - Do not store real personal documents in `private-storage/`.
-- Do not add Phase 4+ features until that phase is the current task.
+- Do not add Phase 5+ features until that phase is the current task.

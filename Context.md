@@ -2,17 +2,17 @@
 
 **Purpose:** Living implementation state for agents and developers. Read this before writing code.
 
-**Last updated:** 2026-10-02 (Phase 3 complete)
+**Last updated:** 2026-10-02 (Phase 4 complete)
 
 ---
 
 ## Current Phase
 
-Phase 3 — Authentication + Authorization (complete)
+Phase 4 — Core LifeOS Data Model (complete)
 
 ## Status
 
-Phase 3 complete. Real register/login/logout with HTTP-only session cookies, bcrypt password hashing, protected API middleware, and frontend wired to the backend. Phase 1 shell and Phase 2 database foundation preserved.
+Phase 4 complete. Canonical domain entities and relations exist in Prisma/PostgreSQL. No Vault CRUD, uploads, or feature UIs yet. Phase 3 authentication remains intact.
 
 ## Completed
 
@@ -22,19 +22,20 @@ Phase 3 complete. Real register/login/logout with HTTP-only session cookies, bcr
 - Phase 0 — Project Initialization
 - Phase 1 — Design System + Application Shell
 - Phase 2 — Database + Backend Foundation
-  - PostgreSQL + Prisma, layered Express backend, `GET /api/health` and `GET /api/ready`
 - Phase 3 — Authentication + Authorization
-  - Register / login / logout / session restore
-  - bcrypt password hashing (cost 12); never plaintext
-  - HTTP-only signed session cookies + PostgreSQL `sessions` table
-  - `requireAuth` middleware and `assertOwnership` helper for future resources
-  - Frontend API client; Login/Register wired to backend; protected `/app/*` routes
+- Phase 4 — Core LifeOS Data Model
+  - Prisma entities: Document, DocumentVersion, Subscription, RecurringPayment, Purchase, Warranty, Deadline, Renewal, InboxItem, Notification, AuditLog
+  - User ownership on all user-scoped domain tables
+  - Purchase → Warranty (1:0..1)
+  - Document → DocumentVersion (1:*)
+  - Optional document links from Purchase (receipt), Renewal, Deadline
+  - Migration `20261002092710_core_domain_model` (Phase 2/3 migrations preserved)
 
 ## Next Task
 
-Phase 4 — Core LifeOS Data Model
+Phase 5 — Vault / Documents
 
-Do not start Phase 4 until explicitly instructed.
+Do not start Phase 5 until explicitly instructed.
 
 ---
 
@@ -78,27 +79,63 @@ Required backend env: `DATABASE_URL`, `SESSION_SECRET` (min 32 characters). Neve
 
 Logout deletes the server session and clears the cookie.
 
-## Important files (Phase 3)
+---
 
-### Backend
+## Phase 4 data model decisions
 
-- `backend/prisma/schema.prisma` — `User.passwordHash`, `Session` model
-- `backend/prisma/migrations/20261002090909_auth_sessions/` — auth migration (Phase 2 init preserved)
-- `backend/src/services/authService.ts`, `sessionService.ts`
-- `backend/src/controllers/authController.ts`
-- `backend/src/middleware/requireAuth.ts`, `sessionHelpers.ts`, `authRateLimit.ts`
-- `backend/src/validators/authValidators.ts`
-- `backend/src/utils/password.ts`, `sessionCookie.ts`, `ownership.ts`
-- `backend/src/routes/authRoutes.ts`
-- `backend/src/auth/auth.test.ts`
+| Decision | Choice |
+| --- | --- |
+| Inheritance | Explicit tables per SDD; no `LifeItem` base table |
+| Financial commitments | Derived from `Subscription` + `RecurringPayment` (no separate finance/ledger table) |
+| Memberships | Represented as Subscription and/or RecurringPayment rows |
+| Warranty cardinality | At most one Warranty per Purchase (`purchaseId` unique) |
+| Document associations | Optional FKs: Purchase.receiptDocumentId; Renewal/Deadline.linkedDocumentId |
+| File storage | `DocumentVersion` / `InboxItem` storage metadata fields only; no uploads in Phase 4 |
+| Money | `Decimal(12,2)` with default currency `INR` |
+| Ownership | Direct `userId` on all listed user-owned models; DocumentVersion owned via Document |
+| Action Center / Timeline | Not stored entities — future derived queries |
+
+### Entities introduced
+
+- Document, DocumentVersion
+- Subscription, RecurringPayment
+- Purchase, Warranty
+- Deadline, Renewal
+- InboxItem, Notification, AuditLog
+
+### Important enums
+
+`DocumentCategory`, `DocumentStatus`, `BillingInterval`, `CommitmentStatus`, `DeadlineStatus`, `RenewalKind`, `RenewalStatus`, `InboxItemStatus`, `NotificationType`
+
+### Migration
+
+`20261002092710_core_domain_model`
+
+### Intentionally deferred (later phases)
+
+- Document upload / private file serving (Phase 5)
+- Document versioning UX/replace flows (Phase 6)
+- Commitment/Purchase/Renewal/Deadline CRUD APIs and UI (Phases 7–9)
+- Action Center, Timeline, financial overview UI (Phases 10–12)
+- Search, Inbox product, AI, notifications delivery, Docker (later)
+
+---
+
+## Important files
+
+### Backend (Phase 3–4)
+
+- `backend/prisma/schema.prisma` — auth + full core domain model
+- `backend/prisma/migrations/20261002083250_init/` — Phase 2
+- `backend/prisma/migrations/20261002090909_auth_sessions/` — Phase 3
+- `backend/prisma/migrations/20261002092710_core_domain_model/` — Phase 4
+- `backend/src/types/domain.ts` — ownership conventions / Prisma type re-exports
+- `backend/src/domain/domainModel.test.ts` — relation/ownership model tests
+- Auth stack unchanged: `authService`, `requireAuth`, `assertOwnership`, auth routes
 
 ### Frontend
 
-- `frontend/src/api/client.ts`, `frontend/src/api/auth.ts`
-- `frontend/src/auth/AuthContext.tsx` — real session restore via `/api/auth/me`
-- `frontend/src/auth/ProtectedRoute.tsx`
-- `frontend/src/pages/LoginPage.tsx`, `RegisterPage.tsx`
-- `frontend/src/components/layout/AppShell.tsx` — logout calls API
+- Unchanged in Phase 4 (shell + real auth from Phase 1/3)
 
 ## API endpoints
 
@@ -111,20 +148,16 @@ Logout deletes the server session and clears the cookie.
 | GET | `/api/health` | No | Liveness (Phase 2) |
 | GET | `/api/ready` | No | DB readiness (Phase 2) |
 
-Safe user JSON: `{ id, email, createdAt }` — never `passwordHash`.
-
-## Database / schema changes
-
-- `users.password_hash` (required)
-- `sessions` table: `id`, `user_id`, `expires_at`, `created_at` with indexes and cascade delete
+No domain CRUD endpoints in Phase 4.
 
 ## Tests / checks performed
 
 - `npx prisma validate` — pass
-- `npx prisma migrate dev` (auth_sessions applied) — pass
+- `npx prisma migrate dev` (`core_domain_model`) — pass; DB synchronized
+- `npx prisma migrate status` — 3 migrations, up to date
 - `npx prisma generate` — pass
 - Backend `npm run typecheck` / `npm run build` — pass
-- Backend `npm test` — 9 auth tests pass (register, duplicate, validation, hash storage, login success/fail, `/me`, unauthenticated reject, logout, no hash leakage)
+- Backend `npm test` — 15 pass (9 Phase 3 auth + 6 Phase 4 model)
 - Frontend `npm run typecheck` / `npm run build` — pass
 - `git diff --check` — run at commit time
 
@@ -133,25 +166,26 @@ Safe user JSON: `{ id, email, createdAt }` — never `passwordHash`.
 - Phase 0: `chore: initialize LifeOS frontend and backend foundations`
 - Phase 1: `feat: complete phase 1 - design system and application shell`
 - Phase 2: `feat: complete phase 2 - database foundation`
-- Phase 3 commit expected: `feat: complete phase 3 - authentication and authorization`
+- Phase 3: `feat: complete phase 3 - authentication and authorization`
+- Phase 4 commit expected: `feat: complete phase 4 - core LifeOS data model`
 - No remote configured; do not push unless explicitly requested
 
 ## Known issues / blockers
 
-- Prisma may log an expected unique-constraint error when duplicate registration is rejected via `P2002` (handled; client receives 409)
+- Prisma may log expected unique-constraint errors for duplicate registration / duplicate warranty tests (handled)
 - CSRF tokens not yet implemented (SameSite=Lax baseline; Phase 19)
 - No email verification / password reset (intentionally deferred)
 
 ## Architectural decisions
 
 - Cool slate canvas + muted teal accent (Phase 1)
-- HTTP-only cookie sessions stored in PostgreSQL (not JWT, not localStorage secrets)
-- Ownership helper ready for Phase 4+ domain resources; no domain CRUD yet
-- Inbox route remains a shell only (Phase 14)
+- HTTP-only cookie sessions stored in PostgreSQL (Phase 3)
+- Explicit relational domain model without LifeItem inheritance (Phase 4)
+- Inbox route remains a shell only until Phase 14
 
 ## Exact next phase
 
-**Phase 4 — Core LifeOS Data Model** (Document, DocumentVersion, Subscription, RecurringPayment, Purchase, Warranty, Deadline, Renewal, InboxItem, Notification, AuditLog)
+**Phase 5 — Vault / Documents** (private upload/list/metadata/delete with ownership-checked file access)
 
 ---
 
@@ -196,3 +230,4 @@ AI is a suggestion layer. Core app must work if AI is unavailable. AI must not a
 | 2026-10-02 | Git initialized; Phase 0 foundation committed. Phase 1 complete: design system, Login/Register UI, protected `/app/*` shell with empty placeholders. Next: Phase 2. |
 | 2026-10-02 | Phase 2 complete: PostgreSQL + Prisma, layered backend, health/ready. Next: Phase 3. |
 | 2026-10-02 | Phase 3 complete: bcrypt + HTTP-only session cookies, auth APIs, frontend wired, ownership foundation. Next: Phase 4 — Core LifeOS Data Model. |
+| 2026-10-02 | Phase 4 complete: core Prisma domain model + migration; no domain CRUD/UI. Next: Phase 5 — Vault / Documents. |
