@@ -6,6 +6,7 @@ const navItems = [
   { to: "/app/home", label: "Home" },
   { to: "/app/vault", label: "Vault" },
   { to: "/app/commitments", label: "Commitments" },
+  { to: "/app/renewals", label: "Renewals" },
   { to: "/app/timeline", label: "Timeline" },
   { to: "/app/inbox", label: "Inbox" },
 ] as const;

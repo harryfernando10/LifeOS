@@ -2,17 +2,17 @@
 
 **Purpose:** Living implementation state for agents and developers. Read this before writing code.
 
-**Last updated:** 2026-10-03 (Phase 8 complete)
+**Last updated:** 2026-10-03 (Phase 9 complete)
 
 ---
 
 ## Current Phase
 
-Phase 8 — Purchases & Warranties (complete)
+Phase 9 — Renewals & Deadlines (complete)
 
 ## Status
 
-Phase 8 complete. Authenticated users can CRUD purchases, attach/update/remove a warranty per purchase, and optionally link an owned Vault document as a receipt. Ownership isolation enforced. No schema migration required (Phase 4 Purchase/Warranty reused). Phases 3–7 remain intact.
+Phase 9 complete. Authenticated users can CRUD renewals (lifecycle kinds) and deadlines with due dates, statuses, action URLs, and optional Vault document links. Ownership isolation enforced. No schema migration required (Phase 4 Renewal/Deadline reused). Phases 3–8 remain intact.
 
 ## Completed
 
@@ -53,12 +53,18 @@ Phase 8 complete. Authenticated users can CRUD purchases, attach/update/remove a
   - Optional receipt link to owned Vault document (`receiptDocumentId`)
   - Commitments page Purchases tab + PurchasesPanel UI
   - Focused purchase/warranty ownership/validation tests
+- Phase 9 — Renewals & Deadlines
+  - Renewal and Deadline CRUD APIs with ownership enforcement
+  - Optional `linkedDocumentId` to owned Vault documents
+  - Action URLs stored and opened externally
+  - `/app/renewals` UI with Renewals + Deadlines tabs
+  - Focused renewal/deadline ownership/validation tests
 
 ## Next Task
 
-Phase 9 — Renewals & Deadlines
+Phase 10 — Action Center
 
-Do not start Phase 9 until explicitly instructed (unless continuing an assigned multi-phase batch).
+Do not start Phase 10 until explicitly instructed (unless continuing an assigned multi-phase batch).
 
 ---
 
@@ -277,11 +283,48 @@ Logout deletes the server session and clears the cookie.
 
 ---
 
+## Phase 9 renewals & deadlines decisions
+
+| Decision | Choice |
+| --- | --- |
+| Models | Reused Phase 4 `Renewal` + `Deadline` (no new migration) |
+| Renewal kinds | User data via `RenewalKind` enum (passport, licence, insurance, domain, etc.) — not hardcoded product modules |
+| Document link | Optional `linkedDocumentId` → owned Vault Document (not unique; SetNull on document delete) |
+| Document validation | Document must belong to same user; foreign/unknown ids rejected |
+| Authorization | All queries filter by `req.authUser.id`; non-owners get 404 |
+| Action URLs | Optional http/https URLs stored; opened externally in UI |
+| Defaults | Renewal status `UPCOMING`, kind `OTHER`; Deadline status `OPEN` |
+| Audit | `RENEWAL_*`, `DEADLINE_*` actions |
+| Deferred | Action Center / Timeline aggregation (Phases 10–11), reminders |
+
+### Renewal / deadline API endpoints
+
+| Method | Path | Auth | Notes |
+| --- | --- | --- | --- |
+| GET/POST | `/api/renewals` | Yes | List / create |
+| GET/PATCH/DELETE | `/api/renewals/:id` | Yes | Read / update / delete |
+| GET/POST | `/api/deadlines` | Yes | List / create |
+| GET/PATCH/DELETE | `/api/deadlines/:id` | Yes | Read / update / delete |
+
+### Frontend
+
+- `/app/renewals` with Renewals + Deadlines tabs
+- List/empty/create/edit/detail; optional Vault document selector; external action URL links
+- Nav item "Renewals" in AppShell
+
+### Intentionally deferred
+
+- Action Center aggregation of overdue renewals/deadlines (Phase 10)
+- Timeline chronological view (Phase 11)
+- In-app reminders / notifications (Phase 15+)
+
+---
+
 ## Important files
 
-### Backend (Phase 3–8)
+### Backend (Phase 3–9)
 
-- `backend/prisma/schema.prisma` — auth + full core domain model (unchanged in Phases 5–8)
+- `backend/prisma/schema.prisma` — auth + full core domain model (unchanged in Phases 5–9)
 - `backend/prisma/migrations/20261002083250_init/` — Phase 2
 - `backend/prisma/migrations/20261002090909_auth_sessions/` — Phase 3
 - `backend/prisma/migrations/20261002092710_core_domain_model/` — Phase 4
@@ -289,16 +332,21 @@ Logout deletes the server session and clears the cookie.
 - `backend/src/services/documentService.ts` — vault + versioning domain logic
 - `backend/src/services/subscriptionService.ts` / `recurringPaymentService.ts`
 - `backend/src/services/purchaseService.ts` — purchases + warranties
+- `backend/src/services/renewalService.ts` / `deadlineService.ts`
 - `backend/src/controllers/documentController.ts` / `routes/documentRoutes.ts`
 - `backend/src/controllers/subscriptionController.ts` / `recurringPaymentController.ts`
 - `backend/src/controllers/purchaseController.ts` / `routes/purchaseRoutes.ts`
+- `backend/src/controllers/renewalController.ts` / `deadlineController.ts`
+- `backend/src/routes/renewalDeadlineRoutes.ts`
 - `backend/src/routes/commitmentRoutes.ts`
 - `backend/src/validators/commitmentValidators.ts`
 - `backend/src/validators/purchaseValidators.ts`
+- `backend/src/validators/renewalDeadlineValidators.ts`
 - `backend/src/documents/documents.test.ts` — Phase 5 tests
 - `backend/src/documents/versions.test.ts` — Phase 6 tests
 - `backend/src/commitments/commitments.test.ts` — Phase 7 tests
 - `backend/src/purchases/purchases.test.ts` — Phase 8 tests
+- `backend/src/renewals/renewalsDeadlines.test.ts` — Phase 9 tests
 - Auth stack unchanged: `authService`, `requireAuth`, `assertOwnership`, auth routes
 
 ### Frontend
@@ -307,8 +355,10 @@ Logout deletes the server session and clears the cookie.
 - `frontend/src/pages/VaultPage.tsx` — Vault UI with version history
 - `frontend/src/api/commitments.ts` — subscription + recurring payment client
 - `frontend/src/api/purchases.ts` — purchase + warranty client
+- `frontend/src/api/renewalsDeadlines.ts` — renewal + deadline client
 - `frontend/src/pages/CommitmentsPage.tsx` — Commitments UI (incl. Purchases tab)
 - `frontend/src/components/PurchasesPanel.tsx` — Purchases/warranties UI
+- `frontend/src/pages/RenewalsPage.tsx` — Renewals & Deadlines UI
 - `frontend/src/api/client.ts` — FormData-aware requests
 
 ## API endpoints
@@ -338,13 +388,17 @@ Logout deletes the server session and clears the cookie.
 | GET/PATCH/DELETE | `/api/purchases/:id` | Yes | Purchase read/update/delete |
 | PUT | `/api/purchases/:id/warranty` | Yes | Warranty upsert |
 | DELETE | `/api/purchases/:id/warranty` | Yes | Warranty remove |
+| GET/POST | `/api/renewals` | Yes | Renewal list/create |
+| GET/PATCH/DELETE | `/api/renewals/:id` | Yes | Renewal read/update/delete |
+| GET/POST | `/api/deadlines` | Yes | Deadline list/create |
+| GET/PATCH/DELETE | `/api/deadlines/:id` | Yes | Deadline read/update/delete |
 
 ## Tests / checks performed
 
-- `npx prisma validate` — pass (no Phase 8 migration)
+- `npx prisma validate` — pass (no Phase 9 migration)
 - `npx prisma migrate status` — Database schema is up to date (3 migrations)
 - Backend `npm run typecheck` / `npm run build` — pass
-- Backend `npm test` — 42 pass (Phases 3–8; 6 Phase 8 purchase/warranty tests)
+- Backend `npm test` — 48 pass (Phases 3–9; 6 Phase 9 renewal/deadline tests)
 - Frontend `npm run typecheck` / `npm run build` — pass
 - `git diff --check` — pass
 
@@ -358,7 +412,8 @@ Logout deletes the server session and clears the cookie.
 - Phase 5: `feat: complete phase 5 - vault and documents`
 - Phase 6: `feat: complete phase 6 - document versioning`
 - Phase 7: `feat: complete phase 7 - commitments`
-- Phase 8 commit expected: `feat: complete phase 8 - purchases and warranties`
+- Phase 8: `feat: complete phase 8 - purchases and warranties`
+- Phase 9 commit expected: `feat: complete phase 9 - renewals and deadlines`
 - No remote configured; do not push unless explicitly requested
 
 ## Known issues / blockers
@@ -376,11 +431,12 @@ Logout deletes the server session and clears the cookie.
 - Version replace reuses DocumentVersion + private storage; no second storage system (Phase 6)
 - Commitments are Subscription + RecurringPayment only — not an accounting system (Phase 7)
 - Purchases reuse Phase 4 Purchase/Warranty; receipt links to existing Vault documents only — no OCR (Phase 8)
+- Renewals/Deadlines reuse Phase 4 models; kinds are enum data, not product modules; no fake payment/renewal (Phase 9)
 - Inbox route remains a shell only until Phase 14
 
 ## Exact next phase
 
-**Phase 9 — Renewals & Deadlines**
+**Phase 10 — Action Center**
 
 ---
 
@@ -410,7 +466,7 @@ LifeOS is a unified personal life-administration system.
 
 Stack: React + TypeScript + Vite + React Router + Tailwind (frontend); Node.js + Express + TypeScript (backend); PostgreSQL + Prisma; optional Python/FastAPI AI after core works; private local file storage first.
 
-Protected routes: `/app/home`, `/app/vault`, `/app/commitments`, `/app/timeline`, `/app/inbox`.
+Protected routes: `/app/home`, `/app/vault`, `/app/commitments`, `/app/renewals`, `/app/timeline`, `/app/inbox`.
 
 AI is a suggestion layer. Core app must work if AI is unavailable. AI must not access the database.
 
@@ -430,3 +486,4 @@ AI is a suggestion layer. Core app must work if AI is unavailable. AI must not a
 | 2026-10-02 | Phase 6 complete: document version history, replace upload, per-version download, ownership tests. Next: Phase 7 — Commitments. |
 | 2026-10-02 | Phase 7 complete: subscriptions + recurring payments CRUD, action URLs, Commitments UI. Next: Phase 8 — Purchases & Warranties. |
 | 2026-10-03 | Phase 8 complete: purchases + warranties CRUD, optional Vault receipt link, Commitments Purchases tab. Next: Phase 9 — Renewals & Deadlines. |
+| 2026-10-03 | Phase 9 complete: renewals + deadlines CRUD, optional Vault document links, `/app/renewals` UI. Next: Phase 10 — Action Center. |
