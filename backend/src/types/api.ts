@@ -46,3 +46,33 @@ export type DocumentResponseBody = {
   updatedAt: string;
   currentVersion: DocumentVersionSummaryBody | null;
 };
+
+export type SubscriptionResponseBody = {
+  id: string;
+  name: string;
+  provider: string | null;
+  amount: string | null;
+  currency: string;
+  billingInterval: string;
+  nextBillingOn: string | null;
+  status: string;
+  actionUrl: string | null;
+  notes: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type RecurringPaymentResponseBody = {
+  id: string;
+  name: string;
+  payee: string | null;
+  amount: string | null;
+  currency: string;
+  billingInterval: string;
+  nextDueOn: string | null;
+  status: string;
+  actionUrl: string | null;
+  notes: string | null;
+  createdAt: string;
+  updatedAt: string;
+};

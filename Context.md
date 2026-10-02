@@ -2,17 +2,17 @@
 
 **Purpose:** Living implementation state for agents and developers. Read this before writing code.
 
-**Last updated:** 2026-10-02 (Phase 6 complete)
+**Last updated:** 2026-10-02 (Phase 7 complete)
 
 ---
 
 ## Current Phase
 
-Phase 6 — Document Versioning (complete)
+Phase 7 — Commitments (complete)
 
 ## Status
 
-Phase 6 complete. Vault documents support version history: replace uploads create a new current version, prior versions remain retrievable/downloadable by the owner, and ownership isolation is enforced. Phase 3 authentication and Phase 5 vault remain intact. No schema migration was required (Phase 4 DocumentVersion model reused).
+Phase 7 complete. Authenticated users can CRUD subscriptions and recurring payments (memberships represented within these), store external action URLs, and manage status/billing fields. Ownership isolation enforced. No schema migration required. Phases 3–6 remain intact.
 
 ## Completed
 
@@ -42,12 +42,17 @@ Phase 6 complete. Vault documents support version history: replace uploads creat
   - Distinct storage keys per version under existing private storage layout
   - Vault UI: version history, current indicator, replace upload, per-version download
   - Focused versioning ownership/security tests
+- Phase 7 — Commitments
+  - Subscription and RecurringPayment CRUD APIs with ownership enforcement
+  - Action URLs stored and opened externally (not executed as integrations)
+  - Commitments UI: list/empty/create/edit/detail for both commitment types
+  - Focused commitment ownership/validation tests
 
 ## Next Task
 
-Phase 7 — Commitments
+Phase 8 — Purchases & Warranties
 
-Do not start Phase 7 until explicitly instructed (unless continuing an assigned multi-phase batch).
+Do not start Phase 8 until explicitly instructed (unless continuing an assigned multi-phase batch).
 
 ---
 
@@ -200,27 +205,61 @@ Logout deletes the server session and clears the cookie.
 
 ---
 
+## Phase 7 commitments decisions
+
+| Decision | Choice |
+| --- | --- |
+| Models | Reused Phase 4 `Subscription` + `RecurringPayment` (no new migration) |
+| Memberships | Represented as subscription and/or recurring payment rows (FR-COM-01) |
+| Action URLs | Optional http(s) URLs; UI opens in new tab; never treated as payment integration |
+| Money | Decimal strings with up to 2 places; default currency `INR` |
+| Status | `ACTIVE` / `PAUSED` / `CANCELLED` via existing `CommitmentStatus` |
+| Authorization | All queries filter by `req.authUser.id`; non-owners get 404 |
+| API surface | Separate `/subscriptions` and `/recurring-payments` CRUD |
+| Deferred | Action Center aggregation, reminders, auto-renewal, financial 7/30/365 overview |
+
+### Commitment API endpoints
+
+| Method | Path | Auth | Notes |
+| --- | --- | --- | --- |
+| GET/POST | `/api/subscriptions` | Yes | List / create |
+| GET/PATCH/DELETE | `/api/subscriptions/:id` | Yes | Read / update / delete |
+| GET/POST | `/api/recurring-payments` | Yes | List / create |
+| GET/PATCH/DELETE | `/api/recurring-payments/:id` | Yes | Read / update / delete |
+
+### Frontend
+
+- `/app/commitments` functional UI with Subscriptions and Recurring payments tabs
+- Create/edit forms, detail panel, external action URL link, delete
+
+---
+
 ## Important files
 
-### Backend (Phase 3–6)
+### Backend (Phase 3–7)
 
-- `backend/prisma/schema.prisma` — auth + full core domain model (unchanged in Phases 5–6)
+- `backend/prisma/schema.prisma` — auth + full core domain model (unchanged in Phases 5–7)
 - `backend/prisma/migrations/20261002083250_init/` — Phase 2
 - `backend/prisma/migrations/20261002090909_auth_sessions/` — Phase 3
 - `backend/prisma/migrations/20261002092710_core_domain_model/` — Phase 4
 - `backend/src/services/fileStorageService.ts` — private storage abstraction
 - `backend/src/services/documentService.ts` — vault + versioning domain logic
+- `backend/src/services/subscriptionService.ts` / `recurringPaymentService.ts`
 - `backend/src/controllers/documentController.ts` / `routes/documentRoutes.ts`
-- `backend/src/middleware/documentUpload.ts` — multer upload limits
-- `backend/src/utils/fileValidation.ts` — magic bytes / filename safety
+- `backend/src/controllers/subscriptionController.ts` / `recurringPaymentController.ts`
+- `backend/src/routes/commitmentRoutes.ts`
+- `backend/src/validators/commitmentValidators.ts`
 - `backend/src/documents/documents.test.ts` — Phase 5 tests
 - `backend/src/documents/versions.test.ts` — Phase 6 tests
+- `backend/src/commitments/commitments.test.ts` — Phase 7 tests
 - Auth stack unchanged: `authService`, `requireAuth`, `assertOwnership`, auth routes
 
 ### Frontend
 
 - `frontend/src/api/documents.ts` — document + version API client
 - `frontend/src/pages/VaultPage.tsx` — Vault UI with version history
+- `frontend/src/api/commitments.ts` — subscription + recurring payment client
+- `frontend/src/pages/CommitmentsPage.tsx` — Commitments UI
 - `frontend/src/api/client.ts` — FormData-aware requests
 
 ## API endpoints
@@ -242,13 +281,16 @@ Logout deletes the server session and clears the cookie.
 | GET | `/api/documents/:id/versions` | Yes | List versions |
 | POST | `/api/documents/:id/versions` | Yes | Upload new version |
 | GET | `/api/documents/:id/versions/:versionId/download` | Yes | Download specific version |
+| GET/POST | `/api/subscriptions` | Yes | Subscription list/create |
+| GET/PATCH/DELETE | `/api/subscriptions/:id` | Yes | Subscription read/update/delete |
+| GET/POST | `/api/recurring-payments` | Yes | Recurring payment list/create |
+| GET/PATCH/DELETE | `/api/recurring-payments/:id` | Yes | Recurring payment read/update/delete |
 
 ## Tests / checks performed
 
-- `npx prisma validate` — pass
-- `npx prisma migrate status` — 3 migrations, up to date (no Phase 6 migration)
+- `npx prisma validate` — pass (no Phase 7 migration)
 - Backend `npm run typecheck` / `npm run build` — pass
-- Backend `npm test` — 30 pass (9 Phase 3 auth + 6 Phase 4 model + 9 Phase 5 vault + 6 Phase 6 versions)
+- Backend `npm test` — 36 pass (prior phases + 6 Phase 7 commitment tests)
 - Frontend `npm run typecheck` / `npm run build` — pass
 - `git diff --check` — run at commit time
 
@@ -260,7 +302,8 @@ Logout deletes the server session and clears the cookie.
 - Phase 3: `feat: complete phase 3 - authentication and authorization`
 - Phase 4: `feat: complete phase 4 - core LifeOS data model`
 - Phase 5: `feat: complete phase 5 - vault and documents`
-- Phase 6 commit expected: `feat: complete phase 6 - document versioning`
+- Phase 6: `feat: complete phase 6 - document versioning`
+- Phase 7 commit expected: `feat: complete phase 7 - commitments`
 - No remote configured; do not push unless explicitly requested
 
 ## Known issues / blockers
@@ -276,11 +319,12 @@ Logout deletes the server session and clears the cookie.
 - Explicit relational domain model without LifeItem inheritance (Phase 4)
 - Private filesystem storage behind a replaceable service abstraction (Phase 5)
 - Version replace reuses DocumentVersion + private storage; no second storage system (Phase 6)
+- Commitments are Subscription + RecurringPayment only — not an accounting system (Phase 7)
 - Inbox route remains a shell only until Phase 14
 
 ## Exact next phase
 
-**Phase 7 — Commitments** (subscriptions, recurring payments, memberships, action URLs)
+**Phase 8 — Purchases & Warranties**
 
 ---
 
@@ -328,3 +372,4 @@ AI is a suggestion layer. Core app must work if AI is unavailable. AI must not a
 | 2026-10-02 | Phase 4 complete: core Prisma domain model + migration; no domain CRUD/UI. Next: Phase 5 — Vault / Documents. |
 | 2026-10-02 | Phase 5 complete: private vault upload/list/metadata/download/delete with ownership-checked storage. Next: Phase 6 — Document Versioning. |
 | 2026-10-02 | Phase 6 complete: document version history, replace upload, per-version download, ownership tests. Next: Phase 7 — Commitments. |
+| 2026-10-02 | Phase 7 complete: subscriptions + recurring payments CRUD, action URLs, Commitments UI. Next: Phase 8 — Purchases & Warranties. |
