@@ -5,6 +5,10 @@
 frontend/.env
 backend/.env
 
+# Prisma local artifacts (migrations are committed; client lives in node_modules)
+backend/prisma/*.db
+backend/prisma/*.db-journal
+
 # Dependencies
 node_modules/
 

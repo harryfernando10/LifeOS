@@ -1,0 +1,21 @@
+// LifeOS Phase 2 — database foundation
+// Full domain model belongs in Phase 4. Keep User minimal and extensible.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+/// Minimal identity row for connectivity and later auth (Phase 3).
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("users")
+}
