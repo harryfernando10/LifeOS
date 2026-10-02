@@ -1,4 +1,5 @@
 import { isValidDatabaseUrl } from "../validators/envValidators.js";
+import { isNonEmptyString } from "../utils/strings.js";
 
 export function getPort(): number {
   const raw = process.env.PORT ?? "3001";
@@ -22,4 +23,38 @@ export function getDatabaseUrl(): string {
     );
   }
   return value;
+}
+
+/**
+ * Secret used to sign the session cookie. Never log this value.
+ */
+export function getSessionSecret(): string {
+  const value = process.env.SESSION_SECRET;
+  if (!isNonEmptyString(value) || value.trim().length < 32) {
+    throw new Error(
+      "SESSION_SECRET is missing or too short (min 32 characters). Set it in backend/.env.",
+    );
+  }
+  return value.trim();
+}
+
+export function getSessionCookieName(): string {
+  return process.env.SESSION_COOKIE_NAME?.trim() || "lifeos.sid";
+}
+
+/** Session lifetime in milliseconds (default 7 days). */
+export function getSessionMaxAgeMs(): number {
+  const raw = process.env.SESSION_MAX_AGE_MS;
+  if (!raw) {
+    return 7 * 24 * 60 * 60 * 1000;
+  }
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return 7 * 24 * 60 * 60 * 1000;
+  }
+  return parsed;
+}
+
+export function isProduction(): boolean {
+  return process.env.NODE_ENV === "production";
 }

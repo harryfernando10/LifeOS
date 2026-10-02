@@ -1,5 +1,6 @@
-// LifeOS Phase 2 — database foundation
-// Full domain model belongs in Phase 4. Keep User minimal and extensible.
+// LifeOS — Prisma schema
+// Phase 2: User foundation. Phase 3: auth fields + sessions.
+// Full domain model belongs in Phase 4.
 
 generator client {
   provider = "prisma-client-js"
@@ -10,12 +11,27 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-/// Minimal identity row for connectivity and later auth (Phase 3).
+/// Authenticated account. Password is stored only as a bcrypt hash.
 model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+  id           String    @id @default(cuid())
+  email        String    @unique
+  passwordHash String    @map("password_hash")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+  sessions     Session[]
 
   @@map("users")
+}
+
+/// Server-side session for HTTP-only cookie authentication.
+model Session {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("sessions")
 }

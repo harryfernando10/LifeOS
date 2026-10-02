@@ -1,28 +1,50 @@
 import { useState, type FormEvent } from "react";
 import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
+import { ApiRequestError } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 import { Button } from "../components/ui/Button";
 import { Input } from "../components/ui/Input";
 
 export function LoginPage() {
-  const { isAuthenticated, signIn } = useAuth();
+  const { isAuthenticated, isLoading, login } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
   const from =
     (location.state as { from?: string } | null)?.from ?? "/app/home";
+
+  if (isLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center px-4">
+        <p className="text-sm text-[var(--lifeos-muted)]">Loading…</p>
+      </div>
+    );
+  }
 
   if (isAuthenticated) {
     return <Navigate to="/app/home" replace />;
   }
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    // Phase 1: UI-only session. Phase 3 wires real credentials to the API.
-    signIn(email || "you@example.com");
-    void navigate(from, { replace: true });
+    setError(null);
+    setSubmitting(true);
+    try {
+      await login(email.trim(), password);
+      void navigate(from, { replace: true });
+    } catch (err) {
+      if (err instanceof ApiRequestError) {
+        setError(err.message);
+      } else {
+        setError("Unable to sign in. Please try again.");
+      }
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   return (
@@ -38,8 +60,7 @@ export function LoginPage() {
           Sign in
         </h1>
         <p className="mt-2 text-sm leading-relaxed text-[var(--lifeos-muted)]">
-          Access your private life-administration system. Authentication will
-          connect to the backend in a later phase.
+          Access your private life-administration system.
         </p>
       </div>
 
@@ -55,6 +76,7 @@ export function LoginPage() {
           value={email}
           onChange={(event) => setEmail(event.target.value)}
           placeholder="you@example.com"
+          required
         />
         <Input
           name="password"
@@ -64,10 +86,16 @@ export function LoginPage() {
           value={password}
           onChange={(event) => setPassword(event.target.value)}
           placeholder="••••••••"
-          hint="UI placeholder — not verified yet."
+          required
+          minLength={8}
         />
-        <Button type="submit" className="mt-2 w-full">
-          Continue
+        {error ? (
+          <p className="text-sm text-red-700" role="alert">
+            {error}
+          </p>
+        ) : null}
+        <Button type="submit" className="mt-2 w-full" disabled={submitting}>
+          {submitting ? "Signing in…" : "Sign in"}
         </Button>
       </form>
 

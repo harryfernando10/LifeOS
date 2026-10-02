@@ -2,70 +2,95 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useState,
   type ReactNode,
 } from "react";
-
-/**
- * Phase 1 placeholder auth only.
- * Real HTTP-only session cookies and backend auth arrive in Phase 3.
- */
-const STORAGE_KEY = "lifeos.phase1.session";
-
-export type PlaceholderSession = {
-  email: string;
-};
+import {
+  fetchCurrentUser,
+  loginAccount,
+  logoutAccount,
+  registerAccount,
+  type AuthUser,
+} from "../api/auth";
+import { ApiRequestError } from "../api/client";
 
 type AuthContextValue = {
-  session: PlaceholderSession | null;
+  user: AuthUser | null;
   isAuthenticated: boolean;
-  signIn: (email: string) => void;
-  signOut: () => void;
+  isLoading: boolean;
+  login: (email: string, password: string) => Promise<void>;
+  register: (email: string, password: string) => Promise<void>;
+  logout: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-function readStoredSession(): PlaceholderSession | null {
-  try {
-    const raw = sessionStorage.getItem(STORAGE_KEY);
-    if (!raw) {
-      return null;
-    }
-    const parsed = JSON.parse(raw) as PlaceholderSession;
-    if (typeof parsed.email === "string" && parsed.email.trim().length > 0) {
-      return { email: parsed.email.trim() };
-    }
-    return null;
-  } catch {
-    return null;
-  }
-}
-
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [session, setSession] = useState<PlaceholderSession | null>(() =>
-    readStoredSession(),
-  );
+  const [user, setUser] = useState<AuthUser | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const signIn = useCallback((email: string) => {
-    const next = { email: email.trim() };
-    sessionStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-    setSession(next);
+  useEffect(() => {
+    let cancelled = false;
+
+    async function restoreSession() {
+      try {
+        const current = await fetchCurrentUser();
+        if (!cancelled) {
+          setUser(current);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setUser(null);
+          if (
+            !(error instanceof ApiRequestError) ||
+            (error.status !== 401 && error.status !== 0)
+          ) {
+            console.error("Session restore failed");
+          }
+        }
+      } finally {
+        if (!cancelled) {
+          setIsLoading(false);
+        }
+      }
+    }
+
+    void restoreSession();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
-  const signOut = useCallback(() => {
-    sessionStorage.removeItem(STORAGE_KEY);
-    setSession(null);
+  const login = useCallback(async (email: string, password: string) => {
+    const next = await loginAccount(email, password);
+    setUser(next);
+  }, []);
+
+  const register = useCallback(async (email: string, password: string) => {
+    const next = await registerAccount(email, password);
+    setUser(next);
+  }, []);
+
+  const logout = useCallback(async () => {
+    try {
+      await logoutAccount();
+    } finally {
+      setUser(null);
+    }
   }, []);
 
   const value = useMemo<AuthContextValue>(
     () => ({
-      session,
-      isAuthenticated: session !== null,
-      signIn,
-      signOut,
+      user,
+      isAuthenticated: user !== null,
+      isLoading,
+      login,
+      register,
+      logout,
     }),
-    [session, signIn, signOut],
+    [user, isLoading, login, register, logout],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

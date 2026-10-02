@@ -1,4 +1,4 @@
-import { NavLink, Outlet } from "react-router-dom";
+import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useAuth } from "../../auth/AuthContext";
 import { Button } from "../ui/Button";
 
@@ -11,7 +11,13 @@ const navItems = [
 ] as const;
 
 export function AppShell() {
-  const { session, signOut } = useAuth();
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
+
+  async function handleSignOut() {
+    await logout();
+    void navigate("/login", { replace: true });
+  }
 
   return (
     <div className="mx-auto flex min-h-screen w-full max-w-6xl flex-col px-4 py-4 sm:px-6 lg:px-8">
@@ -37,19 +43,22 @@ export function AppShell() {
 
         <div className="flex items-center gap-3">
           <p className="truncate text-sm text-[var(--lifeos-muted)]">
-            {session?.email}
+            {user?.email}
           </p>
-          <Button variant="ghost" onClick={signOut} className="shrink-0 px-3 py-2">
+          <Button
+            variant="ghost"
+            onClick={() => {
+              void handleSignOut();
+            }}
+            className="shrink-0 px-3 py-2"
+          >
             Sign out
           </Button>
         </div>
       </header>
 
       <div className="mt-6 flex flex-1 flex-col gap-8 lg:flex-row">
-        <nav
-          aria-label="Primary"
-          className="lg:w-48 lg:shrink-0"
-        >
+        <nav aria-label="Primary" className="lg:w-48 lg:shrink-0">
           <ul className="flex gap-1 overflow-x-auto pb-1 lg:flex-col lg:overflow-visible lg:pb-0">
             {navItems.map((item) => (
               <li key={item.to}>
