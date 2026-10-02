@@ -2,17 +2,17 @@
 
 **Purpose:** Living implementation state for agents and developers. Read this before writing code.
 
-**Last updated:** 2026-10-01 (Phase 0 complete)
+**Last updated:** 2026-10-02 (Phase 1 complete)
 
 ---
 
 ## Current Phase
 
-Phase 1 — Design System + Application Shell
+Phase 2 — Database + Backend Foundation
 
 ## Status
 
-Phase 0 complete. Implementation of Phase 1 has **not** started.
+Phase 1 complete. Design system, auth UI screens, and protected application shell are in place. Real authentication is not wired yet (Phase 3).
 
 ## Completed
 
@@ -26,16 +26,24 @@ Phase 0 complete. Implementation of Phase 1 has **not** started.
   - Vite `/api` proxy to the backend
   - `.gitignore`, `.env.example`, `README.md`
   - `private-storage/` placeholder (no user documents)
+- Phase 1 — Design System + Application Shell
+  - Visual tokens (cool slate/teal palette), Syne + Figtree typography
+  - UI primitives: `Button`, `Input`, `PageHeader`
+  - Login (`/login`) and Register (`/register`) screens as UI only
+  - Placeholder client session via `sessionStorage` (not real auth)
+  - Protected shell with nav: Home, Vault, Commitments, Timeline, Inbox
+  - Routes: `/app/home`, `/app/vault`, `/app/commitments`, `/app/timeline`, `/app/inbox`
+  - Calm empty-state placeholders (no fake Action Center data)
 
 ## Next Task
 
-Phase 1 — Design System + Application Shell
+Phase 2 — Database + Backend Foundation
 
-Do not start Phase 1 until explicitly instructed.
+Do not start Phase 2 until explicitly instructed.
 
 ---
 
-## How to run (Phase 0)
+## How to run
 
 Requires Node.js 22+ and npm.
 
@@ -55,6 +63,55 @@ Copy env examples before first run:
 - `backend/.env.example` → `backend/.env`
 
 Never commit `.env` files.
+
+**Phase 1 UI note:** Sign in / Create account only set a local placeholder session so the `/app/*` shell is reachable. Passwords are not verified or stored. Replace in Phase 3.
+
+---
+
+## Important files (Phase 1)
+
+- `frontend/src/index.css` — design tokens and canvas atmosphere
+- `frontend/src/auth/AuthContext.tsx` — placeholder session (Phase 3 will replace)
+- `frontend/src/auth/ProtectedRoute.tsx` — redirects unauthenticated users to `/login`
+- `frontend/src/components/layout/AppShell.tsx` — app chrome + navigation
+- `frontend/src/components/ui/*` — Button, Input, PageHeader
+- `frontend/src/pages/*` — Login, Register, Home, Vault, Commitments, Timeline, Inbox
+- `frontend/src/App.tsx` — route map
+- `frontend/index.html` — font loading
+
+## API / database changes
+
+None in Phase 1. Backend still only exposes `GET /api/health`.
+
+## Tests / checks performed
+
+- Frontend `tsc -b` and `vite build` — pass
+- Backend `tsc --noEmit` and `tsc` build — pass
+- Backend health `GET /api/health` — `{ status: "ok", service: "lifeos-backend" }`
+- Vite proxy `/api/health` — ok
+- SPA routes return HTTP 200: `/login`, `/register`, `/app/home`, `/app/vault`, `/app/commitments`, `/app/timeline`, `/app/inbox`
+
+## Git state
+
+- Repository initialized locally on 2026-10-02
+- Phase 0 commit: `chore: initialize LifeOS frontend and backend foundations`
+- Phase 1 commit expected after this update
+- No remote configured; do not push unless explicitly requested
+
+## Known issues / blockers
+
+- System `npm` may be missing from PATH in some agent shells; local `node_modules/.bin` tools still work when Node is available
+- Placeholder auth is intentionally insecure for shell demos only — must not ship as real auth
+
+## Architectural decisions
+
+- Cool slate canvas + muted teal accent (avoid cream/terracotta and purple defaults)
+- Client-side placeholder session until Phase 3 HTTP-only cookies
+- Inbox route is a shell only; full Life Inbox remains post-MVP (Phase 14)
+
+## Exact next phase
+
+**Phase 2 — Database + Backend Foundation** (PostgreSQL + Prisma, layered backend readiness, health/readiness with DB connectivity)
 
 ---
 
@@ -84,7 +141,7 @@ LifeOS is a unified personal life-administration system.
 
 Stack: React + TypeScript + Vite + React Router + Tailwind (frontend); Node.js + Express + TypeScript (backend); PostgreSQL + Prisma; optional Python/FastAPI AI after core works; private local file storage first.
 
-Protected routes (Phase 1+): `/app/home`, `/app/vault`, `/app/commitments`, `/app/timeline`, `/app/inbox`.
+Protected routes: `/app/home`, `/app/vault`, `/app/commitments`, `/app/timeline`, `/app/inbox`.
 
 AI is a suggestion layer. Core app must work if AI is unavailable. AI must not access the database.
 
@@ -96,3 +153,4 @@ AI is a suggestion layer. Core app must work if AI is unavailable. AI must not a
 | --- | --- |
 | 2026-10-01 | Planning documents created. No frontend, backend, database, or packages initialized. |
 | 2026-10-01 | Phase 0 complete: runnable frontend and backend, health check, TypeScript/build verified. No Prisma, auth, product features, or AI. Next: Phase 1 (not started). |
+| 2026-10-02 | Git initialized; Phase 0 foundation committed. Phase 1 complete: design system, Login/Register UI, protected `/app/*` shell with empty placeholders. Next: Phase 2. |

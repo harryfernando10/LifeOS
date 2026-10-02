@@ -8,7 +8,7 @@ Planning documents: `SRS.md`, `SDD.md`, `DEVELOPMENT_PLAN.md`, `Context.md`.
 
 ## Current status
 
-Phase 0 — Project Initialization. Empty runnable frontend and backend. No product features, database, authentication, or AI.
+Phase 1 — Design System + Application Shell complete. Login/Register UI and protected `/app/*` shell with calm placeholders. No database, real authentication, or product CRUD yet.
 
 ## Prerequisites
 
@@ -48,6 +48,8 @@ npm run dev
 Frontend: http://localhost:5173  
 The Vite dev server proxies `/api` to the backend.
 
+Open `/login` or `/register`, then continue into the app shell. Sign-in is a UI placeholder until Phase 3.
+
 ## Checks
 
 ```bash
@@ -59,4 +61,4 @@ cd ../backend && npm run typecheck && npm run build
 
 - Do not commit `.env` files.
 - Do not store real personal documents in `private-storage/`.
-- Do not add Phase 1+ features until that phase is the current task.
+- Do not add Phase 2+ features until that phase is the current task.
