@@ -2,17 +2,17 @@
 
 **Purpose:** Living implementation state for agents and developers. Read this before writing code.
 
-**Last updated:** 2026-10-02 (Phase 7 complete)
+**Last updated:** 2026-10-03 (Phase 8 complete)
 
 ---
 
 ## Current Phase
 
-Phase 7 — Commitments (complete)
+Phase 8 — Purchases & Warranties (complete)
 
 ## Status
 
-Phase 7 complete. Authenticated users can CRUD subscriptions and recurring payments (memberships represented within these), store external action URLs, and manage status/billing fields. Ownership isolation enforced. No schema migration required. Phases 3–6 remain intact.
+Phase 8 complete. Authenticated users can CRUD purchases, attach/update/remove a warranty per purchase, and optionally link an owned Vault document as a receipt. Ownership isolation enforced. No schema migration required (Phase 4 Purchase/Warranty reused). Phases 3–7 remain intact.
 
 ## Completed
 
@@ -47,12 +47,18 @@ Phase 7 complete. Authenticated users can CRUD subscriptions and recurring payme
   - Action URLs stored and opened externally (not executed as integrations)
   - Commitments UI: list/empty/create/edit/detail for both commitment types
   - Focused commitment ownership/validation tests
+- Phase 8 — Purchases & Warranties
+  - Purchase CRUD APIs with ownership enforcement
+  - Warranty upsert/delete nested under purchase (1:0..1)
+  - Optional receipt link to owned Vault document (`receiptDocumentId`)
+  - Commitments page Purchases tab + PurchasesPanel UI
+  - Focused purchase/warranty ownership/validation tests
 
 ## Next Task
 
-Phase 8 — Purchases & Warranties
+Phase 9 — Renewals & Deadlines
 
-Do not start Phase 8 until explicitly instructed (unless continuing an assigned multi-phase batch).
+Do not start Phase 9 until explicitly instructed (unless continuing an assigned multi-phase batch).
 
 ---
 
@@ -234,24 +240,65 @@ Logout deletes the server session and clears the cookie.
 
 ---
 
+## Phase 8 purchases & warranties decisions
+
+| Decision | Choice |
+| --- | --- |
+| Models | Reused Phase 4 `Purchase` + `Warranty` (no new migration) |
+| Warranty cardinality | At most one warranty per purchase (`purchaseId` unique); upsert via PUT |
+| Receipt link | Optional `receiptDocumentId` → owned Vault Document; unique per document |
+| Receipt validation | Document must belong to same user; foreign/unknown ids rejected |
+| Authorization | All purchase queries filter by `req.authUser.id`; warranty gated through owned purchase; non-owners get 404 |
+| Money | Decimal strings with up to 2 places; default currency `INR` |
+| Expiry | Warranty `endsOn` required; `startsOn` optional; startsOn cannot be after endsOn |
+| Audit | `PURCHASE_*`, `WARRANTY_*` actions |
+| Deferred | OCR, receipt intelligence, AI extraction, Action Center warranty aggregation, shopping marketplace |
+
+### Purchase / warranty API endpoints
+
+| Method | Path | Auth | Notes |
+| --- | --- | --- | --- |
+| GET/POST | `/api/purchases` | Yes | List / create |
+| GET/PATCH/DELETE | `/api/purchases/:id` | Yes | Read / update / delete (cascade deletes warranty) |
+| PUT | `/api/purchases/:id/warranty` | Yes | Create or update warranty for purchase |
+| DELETE | `/api/purchases/:id/warranty` | Yes | Remove warranty; returns updated purchase |
+
+### Frontend
+
+- `/app/commitments` adds a Purchases tab
+- `PurchasesPanel`: list/empty/create/edit/detail, warranty form, receipt document selector from Vault
+
+### Intentionally deferred
+
+- OCR / receipt intelligence (Phase 16)
+- Action Center / Timeline warranty expiry surfaces (Phases 10–11)
+- Multiple warranties per purchase
+- Shopping / marketplace / expense accounting features
+
+---
+
 ## Important files
 
-### Backend (Phase 3–7)
+### Backend (Phase 3–8)
 
-- `backend/prisma/schema.prisma` — auth + full core domain model (unchanged in Phases 5–7)
+- `backend/prisma/schema.prisma` — auth + full core domain model (unchanged in Phases 5–8)
 - `backend/prisma/migrations/20261002083250_init/` — Phase 2
 - `backend/prisma/migrations/20261002090909_auth_sessions/` — Phase 3
 - `backend/prisma/migrations/20261002092710_core_domain_model/` — Phase 4
 - `backend/src/services/fileStorageService.ts` — private storage abstraction
 - `backend/src/services/documentService.ts` — vault + versioning domain logic
 - `backend/src/services/subscriptionService.ts` / `recurringPaymentService.ts`
+- `backend/src/services/purchaseService.ts` — purchases + warranties
 - `backend/src/controllers/documentController.ts` / `routes/documentRoutes.ts`
 - `backend/src/controllers/subscriptionController.ts` / `recurringPaymentController.ts`
+- `backend/src/controllers/purchaseController.ts` / `routes/purchaseRoutes.ts`
 - `backend/src/routes/commitmentRoutes.ts`
 - `backend/src/validators/commitmentValidators.ts`
+- `backend/src/validators/purchaseValidators.ts`
 - `backend/src/documents/documents.test.ts` — Phase 5 tests
 - `backend/src/documents/versions.test.ts` — Phase 6 tests
 - `backend/src/commitments/commitments.test.ts` — Phase 7 tests
+- `backend/src/purchases/purchases.test.ts` — Phase 8 tests
 - Auth stack unchanged: `authService`, `requireAuth`, `assertOwnership`, auth routes
 
 ### Frontend
@@ -259,7 +306,9 @@ Logout deletes the server session and clears the cookie.
 - `frontend/src/api/documents.ts` — document + version API client
 - `frontend/src/pages/VaultPage.tsx` — Vault UI with version history
 - `frontend/src/api/commitments.ts` — subscription + recurring payment client
-- `frontend/src/pages/CommitmentsPage.tsx` — Commitments UI
+- `frontend/src/api/purchases.ts` — purchase + warranty client
+- `frontend/src/pages/CommitmentsPage.tsx` — Commitments UI (incl. Purchases tab)
+- `frontend/src/components/PurchasesPanel.tsx` — Purchases/warranties UI
 - `frontend/src/api/client.ts` — FormData-aware requests
 
 ## API endpoints
@@ -285,14 +334,19 @@ Logout deletes the server session and clears the cookie.
 | GET/PATCH/DELETE | `/api/subscriptions/:id` | Yes | Subscription read/update/delete |
 | GET/POST | `/api/recurring-payments` | Yes | Recurring payment list/create |
 | GET/PATCH/DELETE | `/api/recurring-payments/:id` | Yes | Recurring payment read/update/delete |
+| GET/POST | `/api/purchases` | Yes | Purchase list/create |
+| GET/PATCH/DELETE | `/api/purchases/:id` | Yes | Purchase read/update/delete |
+| PUT | `/api/purchases/:id/warranty` | Yes | Warranty upsert |
+| DELETE | `/api/purchases/:id/warranty` | Yes | Warranty remove |
 
 ## Tests / checks performed
 
-- `npx prisma validate` — pass (no Phase 7 migration)
+- `npx prisma validate` — pass (no Phase 8 migration)
+- `npx prisma migrate status` — Database schema is up to date (3 migrations)
 - Backend `npm run typecheck` / `npm run build` — pass
-- Backend `npm test` — 36 pass (prior phases + 6 Phase 7 commitment tests)
+- Backend `npm test` — 42 pass (Phases 3–8; 6 Phase 8 purchase/warranty tests)
 - Frontend `npm run typecheck` / `npm run build` — pass
-- `git diff --check` — run at commit time
+- `git diff --check` — pass
 
 ## Git state
 
@@ -303,7 +357,8 @@ Logout deletes the server session and clears the cookie.
 - Phase 4: `feat: complete phase 4 - core LifeOS data model`
 - Phase 5: `feat: complete phase 5 - vault and documents`
 - Phase 6: `feat: complete phase 6 - document versioning`
-- Phase 7 commit expected: `feat: complete phase 7 - commitments`
+- Phase 7: `feat: complete phase 7 - commitments`
+- Phase 8 commit expected: `feat: complete phase 8 - purchases and warranties`
 - No remote configured; do not push unless explicitly requested
 
 ## Known issues / blockers
@@ -320,11 +375,12 @@ Logout deletes the server session and clears the cookie.
 - Private filesystem storage behind a replaceable service abstraction (Phase 5)
 - Version replace reuses DocumentVersion + private storage; no second storage system (Phase 6)
 - Commitments are Subscription + RecurringPayment only — not an accounting system (Phase 7)
+- Purchases reuse Phase 4 Purchase/Warranty; receipt links to existing Vault documents only — no OCR (Phase 8)
 - Inbox route remains a shell only until Phase 14
 
 ## Exact next phase
 
-**Phase 8 — Purchases & Warranties**
+**Phase 9 — Renewals & Deadlines**
 
 ---
 
@@ -373,3 +429,4 @@ AI is a suggestion layer. Core app must work if AI is unavailable. AI must not a
 | 2026-10-02 | Phase 5 complete: private vault upload/list/metadata/download/delete with ownership-checked storage. Next: Phase 6 — Document Versioning. |
 | 2026-10-02 | Phase 6 complete: document version history, replace upload, per-version download, ownership tests. Next: Phase 7 — Commitments. |
 | 2026-10-02 | Phase 7 complete: subscriptions + recurring payments CRUD, action URLs, Commitments UI. Next: Phase 8 — Purchases & Warranties. |
+| 2026-10-03 | Phase 8 complete: purchases + warranties CRUD, optional Vault receipt link, Commitments Purchases tab. Next: Phase 9 — Renewals & Deadlines. |

@@ -76,3 +76,30 @@ export type RecurringPaymentResponseBody = {
   createdAt: string;
   updatedAt: string;
 };
+
+export type WarrantyResponseBody = {
+  id: string;
+  purchaseId: string;
+  provider: string | null;
+  startsOn: string | null;
+  endsOn: string;
+  terms: string | null;
+  notes: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type PurchaseResponseBody = {
+  id: string;
+  name: string;
+  purchasedOn: string;
+  amount: string | null;
+  currency: string;
+  vendor: string | null;
+  notes: string | null;
+  receiptDocumentId: string | null;
+  receiptTitle: string | null;
+  warranty: WarrantyResponseBody | null;
+  createdAt: string;
+  updatedAt: string;
+};

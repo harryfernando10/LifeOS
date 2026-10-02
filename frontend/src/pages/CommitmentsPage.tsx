@@ -19,11 +19,12 @@ import {
   type Subscription,
 } from "../api/commitments";
 import { ApiRequestError } from "../api/client";
+import { PurchasesPanel } from "../components/PurchasesPanel";
 import { Button } from "../components/ui/Button";
 import { Input } from "../components/ui/Input";
 import { PageHeader } from "../components/ui/PageHeader";
 
-type CommitmentTab = "subscriptions" | "payments";
+type CommitmentTab = "subscriptions" | "payments" | "purchases";
 
 type SubscriptionFormState = {
   name: string;
@@ -338,32 +339,34 @@ export function CommitmentsPage() {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <PageHeader
           title="Commitments"
-          description="Subscriptions, recurring payments, and memberships. Action URLs open externally — LifeOS does not process payments."
+          description="Subscriptions, recurring payments, memberships, and purchases. Action URLs open externally — LifeOS does not process payments."
         />
-        <Button
-          type="button"
-          onClick={() => {
-            if (showForm && !editingId) {
-              resetForms();
-              return;
-            }
-            beginCreate();
-          }}
-        >
-          {showForm && !editingId
-            ? "Close form"
-            : tab === "subscriptions"
-              ? "Add subscription"
-              : "Add recurring payment"}
-        </Button>
+        {tab !== "purchases" ? (
+          <Button
+            type="button"
+            onClick={() => {
+              if (showForm && !editingId) {
+                resetForms();
+                return;
+              }
+              beginCreate();
+            }}
+          >
+            {showForm && !editingId
+              ? "Close form"
+              : tab === "subscriptions"
+                ? "Add subscription"
+                : "Add recurring payment"}
+          </Button>
+        ) : null}
       </div>
 
-      {error ? (
+      {tab !== "purchases" && error ? (
         <p className="text-sm text-[var(--lifeos-danger)]" role="alert">
           {error}
         </p>
       ) : null}
-      {success ? (
+      {tab !== "purchases" && success ? (
         <p className="text-sm text-[var(--lifeos-accent)]" role="status">
           {success}
         </p>
@@ -392,9 +395,22 @@ export function CommitmentsPage() {
         >
           Recurring payments ({payments.length})
         </Button>
+        <Button
+          type="button"
+          variant={tab === "purchases" ? "primary" : "secondary"}
+          onClick={() => {
+            setTab("purchases");
+            setShowForm(false);
+            setEditingId(null);
+          }}
+        >
+          Purchases
+        </Button>
       </div>
 
-      {showForm ? (
+      {tab === "purchases" ? <PurchasesPanel /> : null}
+
+      {tab !== "purchases" && showForm ? (
         tab === "subscriptions" ? (
           <form
             onSubmit={handleSubscriptionSubmit}
@@ -692,9 +708,9 @@ export function CommitmentsPage() {
         )
       ) : null}
 
-      {loading ? (
+      {tab !== "purchases" && loading ? (
         <p className="text-sm text-[var(--lifeos-muted)]">Loading commitments…</p>
-      ) : isEmpty && !showForm ? (
+      ) : tab !== "purchases" && isEmpty && !showForm ? (
         <div className="rounded-2xl border border-dashed border-[var(--lifeos-border)] bg-white/50 px-5 py-10">
           <p className="text-sm font-medium text-[var(--lifeos-ink-soft)]">
             No commitments yet
@@ -707,8 +723,7 @@ export function CommitmentsPage() {
             Add commitment
           </Button>
         </div>
-      ) : tab === "subscriptions" ? (
-        <div className="grid gap-6 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
+      ) : tab === "subscriptions" ? (        <div className="grid gap-6 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
           <ul className="divide-y divide-[var(--lifeos-border)] overflow-hidden rounded-2xl border border-[var(--lifeos-border)] bg-[var(--lifeos-surface)]/90">
             {subscriptions.length === 0 ? (
               <li className="px-4 py-8 text-sm text-[var(--lifeos-muted)]">
@@ -821,7 +836,7 @@ export function CommitmentsPage() {
             )}
           </div>
         </div>
-      ) : (
+      ) : tab === "payments" ? (
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
           <ul className="divide-y divide-[var(--lifeos-border)] overflow-hidden rounded-2xl border border-[var(--lifeos-border)] bg-[var(--lifeos-surface)]/90">
             {payments.length === 0 ? (
@@ -935,7 +950,7 @@ export function CommitmentsPage() {
             )}
           </div>
         </div>
-      )}
+      ) : null}
     </section>
   );
 }
