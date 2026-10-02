@@ -27,6 +27,7 @@ export type DocumentVersionSummary = {
   sizeBytes: number | null;
   isCurrent: boolean;
   uploadedAt: string;
+  replacedAt: string | null;
 };
 
 export type VaultDocument = {
@@ -66,6 +67,11 @@ export type DocumentUpdateInput = {
 
 type DocumentsResponse = { documents: VaultDocument[] };
 type DocumentResponse = { document: VaultDocument };
+type VersionsResponse = { versions: DocumentVersionSummary[] };
+type VersionCreateResponse = {
+  document: VaultDocument;
+  version: DocumentVersionSummary;
+};
 
 export async function listDocuments(): Promise<VaultDocument[]> {
   const body = await apiRequest<DocumentsResponse>("/documents");
@@ -122,10 +128,54 @@ export async function deleteDocument(id: string): Promise<void> {
   await apiRequest<void>(`/documents/${id}`, { method: "DELETE" });
 }
 
-export async function downloadDocument(id: string): Promise<void> {
+export async function listDocumentVersions(
+  documentId: string,
+): Promise<DocumentVersionSummary[]> {
+  const body = await apiRequest<VersionsResponse>(
+    `/documents/${documentId}/versions`,
+  );
+  return body.versions;
+}
+
+export async function createDocumentVersion(
+  documentId: string,
+  input: { file: File; notes?: string },
+): Promise<VersionCreateResponse> {
+  const form = new FormData();
+  form.set("file", input.file);
+  if (input.notes) {
+    form.set("notes", input.notes);
+  }
+
+  return apiRequest<VersionCreateResponse>(
+    `/documents/${documentId}/versions`,
+    {
+      method: "POST",
+      body: form,
+    },
+  );
+}
+
+async function triggerBrowserDownload(response: Response): Promise<void> {
+  const blob = await response.blob();
+  const disposition = response.headers.get("content-disposition") ?? "";
+  const match = /filename="([^"]+)"/.exec(disposition);
+  const filename = match?.[1] ?? "document";
+
+  const objectUrl = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = objectUrl;
+  anchor.download = filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(objectUrl);
+}
+
+async function fetchDownload(path: string): Promise<void> {
   let response: Response;
   try {
-    response = await fetch(`${getApiBaseUrl()}/documents/${id}/download`, {
+    response = await fetch(`${getApiBaseUrl()}${path}`, {
       method: "GET",
       credentials: "include",
     });
@@ -153,19 +203,20 @@ export async function downloadDocument(id: string): Promise<void> {
     throw new ApiRequestError("Download failed.", response.status);
   }
 
-  const blob = await response.blob();
-  const disposition = response.headers.get("content-disposition") ?? "";
-  const match = /filename="([^"]+)"/.exec(disposition);
-  const filename = match?.[1] ?? "document";
+  await triggerBrowserDownload(response);
+}
 
-  const objectUrl = URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
-  anchor.href = objectUrl;
-  anchor.download = filename;
-  document.body.appendChild(anchor);
-  anchor.click();
-  anchor.remove();
-  URL.revokeObjectURL(objectUrl);
+export async function downloadDocument(id: string): Promise<void> {
+  await fetchDownload(`/documents/${id}/download`);
+}
+
+export async function downloadDocumentVersion(
+  documentId: string,
+  versionId: string,
+): Promise<void> {
+  await fetchDownload(
+    `/documents/${documentId}/versions/${versionId}/download`,
+  );
 }
 
 export function formatCategoryLabel(category: DocumentCategory): string {
@@ -187,4 +238,12 @@ export function formatFileSize(bytes: number | null | undefined): string {
     return `${(bytes / 1024).toFixed(1)} KB`;
   }
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+export function formatUploadedAt(iso: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) {
+    return iso;
+  }
+  return date.toLocaleString();
 }

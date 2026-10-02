@@ -2,17 +2,17 @@
 
 **Purpose:** Living implementation state for agents and developers. Read this before writing code.
 
-**Last updated:** 2026-10-02 (Phase 5 complete)
+**Last updated:** 2026-10-02 (Phase 6 complete)
 
 ---
 
 ## Current Phase
 
-Phase 5 — Vault / Documents (complete)
+Phase 6 — Document Versioning (complete)
 
 ## Status
 
-Phase 5 complete. Authenticated users can upload, list, view, update metadata, download, and delete private vault documents. Phase 3 authentication and Phase 4 data model remain intact. No schema migration was required.
+Phase 6 complete. Vault documents support version history: replace uploads create a new current version, prior versions remain retrievable/downloadable by the owner, and ownership isolation is enforced. Phase 3 authentication and Phase 5 vault remain intact. No schema migration was required (Phase 4 DocumentVersion model reused).
 
 ## Completed
 
@@ -36,12 +36,18 @@ Phase 5 complete. Authenticated users can upload, list, view, update metadata, d
   - Functional Vault UI (upload/list/detail/download/delete/metadata update)
   - Baseline audit log entries for create/update/delete
   - Focused vault security/ownership tests
+- Phase 6 — Document Versioning
+  - List versions, upload replacement version, download specific version
+  - `isCurrent` / `replacedAt` / monotonic `versionNumber` on DocumentVersion
+  - Distinct storage keys per version under existing private storage layout
+  - Vault UI: version history, current indicator, replace upload, per-version download
+  - Focused versioning ownership/security tests
 
 ## Next Task
 
-Phase 6 — Document Versioning
+Phase 7 — Commitments
 
-Do not start Phase 6 until explicitly instructed.
+Do not start Phase 7 until explicitly instructed (unless continuing an assigned multi-phase batch).
 
 ---
 
@@ -131,7 +137,7 @@ Logout deletes the server session and clears the cookie.
 | Storage | Private local filesystem via `FileStorageService` abstraction (not PostgreSQL BLOBs; not Express static) |
 | Layout | `private-storage/{userId}/{documentId}/{versionId}` — storage key is relative; absolute paths never returned to clients |
 | Versioning (Phase 5) | Upload creates Document + DocumentVersion `versionNumber=1`, `isCurrent=true`. Download uses current version only |
-| Version history UI / replace | Intentionally deferred to Phase 6 |
+| Version history UI / replace | Implemented in Phase 6 |
 | File types | PDF, JPEG, PNG, WEBP (magic-byte detection + extension/MIME hints) |
 | Size limit | `MAX_UPLOAD_BYTES` env (default 10 MiB) |
 | Upload stack | `multer` memory storage → validate → store file → Prisma transaction; orphan file cleanup on DB failure |
@@ -152,7 +158,6 @@ Logout deletes the server session and clears the cookie.
 
 ### Intentionally deferred (later phases)
 
-- Document version history UI / replace flow (Phase 6)
 - OCR / AI extraction / receipt intelligence
 - Life Inbox processing
 - Global search / Ctrl+K / Action Center / Timeline / notifications
@@ -161,26 +166,61 @@ Logout deletes the server session and clears the cookie.
 
 ---
 
+## Phase 6 document versioning decisions
+
+| Decision | Choice |
+| --- | --- |
+| Schema | Reused Phase 4 `DocumentVersion` (no new migration) |
+| Current marker | Exactly one `isCurrent=true` after replace; previous current gets `replacedAt` |
+| Version numbers | Monotonic integers per document (`versionNumber` unique with documentId) |
+| Storage | Same `FileStorageService` layout; new versionId → new storage key (no overwrite) |
+| Consistency | Store file first, then DB transaction; delete orphan file if DB fails |
+| Authorization | Parent Document `userId` gate; version endpoints return 404 for non-owners |
+| API surface | List / create / download-by-version only (no separate delete-version) |
+| Audit | `DOCUMENT_VERSION_CREATED` |
+| Response safety | Never expose `storageKey` or absolute paths |
+
+### Version API endpoints
+
+| Method | Path | Auth | Notes |
+| --- | --- | --- | --- |
+| GET | `/api/documents/:id/versions` | Yes | List versions (newest first) |
+| POST | `/api/documents/:id/versions` | Yes | Multipart replace (`file`, optional `notes`) |
+| GET | `/api/documents/:id/versions/:versionId/download` | Yes | Download a specific owned version |
+
+### Frontend
+
+- Vault detail panel: version history list, current badge, upload new version, per-version download
+- Existing current-version download retained
+
+### Intentionally deferred
+
+- OCR / AI / search / sharing / Action Center / Timeline / notifications
+- Deleting individual historical versions (document delete removes all)
+
+---
+
 ## Important files
 
-### Backend (Phase 3–5)
+### Backend (Phase 3–6)
 
-- `backend/prisma/schema.prisma` — auth + full core domain model (unchanged in Phase 5)
+- `backend/prisma/schema.prisma` — auth + full core domain model (unchanged in Phases 5–6)
 - `backend/prisma/migrations/20261002083250_init/` — Phase 2
 - `backend/prisma/migrations/20261002090909_auth_sessions/` — Phase 3
 - `backend/prisma/migrations/20261002092710_core_domain_model/` — Phase 4
 - `backend/src/services/fileStorageService.ts` — private storage abstraction
-- `backend/src/services/documentService.ts` — vault domain logic
+- `backend/src/services/documentService.ts` — vault + versioning domain logic
 - `backend/src/controllers/documentController.ts` / `routes/documentRoutes.ts`
 - `backend/src/middleware/documentUpload.ts` — multer upload limits
 - `backend/src/utils/fileValidation.ts` — magic bytes / filename safety
 - `backend/src/documents/documents.test.ts` — Phase 5 tests
+- `backend/src/documents/versions.test.ts` — Phase 6 tests
 - Auth stack unchanged: `authService`, `requireAuth`, `assertOwnership`, auth routes
 
 ### Frontend
 
-- `frontend/src/api/documents.ts` — document API client
-- `frontend/src/pages/VaultPage.tsx` — functional Vault UI
+- `frontend/src/api/documents.ts` — document + version API client
+- `frontend/src/pages/VaultPage.tsx` — Vault UI with version history
 - `frontend/src/api/client.ts` — FormData-aware requests
 
 ## API endpoints
@@ -199,13 +239,16 @@ Logout deletes the server session and clears the cookie.
 | PATCH | `/api/documents/:id` | Yes | Update metadata |
 | DELETE | `/api/documents/:id` | Yes | Delete |
 | GET | `/api/documents/:id/download` | Yes | Download current file |
+| GET | `/api/documents/:id/versions` | Yes | List versions |
+| POST | `/api/documents/:id/versions` | Yes | Upload new version |
+| GET | `/api/documents/:id/versions/:versionId/download` | Yes | Download specific version |
 
 ## Tests / checks performed
 
 - `npx prisma validate` — pass
-- `npx prisma migrate status` — 3 migrations, up to date (no Phase 5 migration)
+- `npx prisma migrate status` — 3 migrations, up to date (no Phase 6 migration)
 - Backend `npm run typecheck` / `npm run build` — pass
-- Backend `npm test` — 24 pass (9 Phase 3 auth + 6 Phase 4 model + 9 Phase 5 vault)
+- Backend `npm test` — 30 pass (9 Phase 3 auth + 6 Phase 4 model + 9 Phase 5 vault + 6 Phase 6 versions)
 - Frontend `npm run typecheck` / `npm run build` — pass
 - `git diff --check` — run at commit time
 
@@ -216,7 +259,8 @@ Logout deletes the server session and clears the cookie.
 - Phase 2: `feat: complete phase 2 - database foundation`
 - Phase 3: `feat: complete phase 3 - authentication and authorization`
 - Phase 4: `feat: complete phase 4 - core LifeOS data model`
-- Phase 5 commit expected: `feat: complete phase 5 - vault and documents`
+- Phase 5: `feat: complete phase 5 - vault and documents`
+- Phase 6 commit expected: `feat: complete phase 6 - document versioning`
 - No remote configured; do not push unless explicitly requested
 
 ## Known issues / blockers
@@ -224,7 +268,6 @@ Logout deletes the server session and clears the cookie.
 - Prisma may log expected unique-constraint errors for duplicate registration / duplicate warranty tests (handled)
 - CSRF tokens not yet implemented (SameSite=Lax baseline; Phase 19)
 - No email verification / password reset (intentionally deferred)
-- Version replace / history UX not implemented (Phase 6)
 
 ## Architectural decisions
 
@@ -232,12 +275,12 @@ Logout deletes the server session and clears the cookie.
 - HTTP-only cookie sessions stored in PostgreSQL (Phase 3)
 - Explicit relational domain model without LifeItem inheritance (Phase 4)
 - Private filesystem storage behind a replaceable service abstraction (Phase 5)
-- Phase 5 creates only the current DocumentVersion needed for store/retrieve; full versioning UX is Phase 6
+- Version replace reuses DocumentVersion + private storage; no second storage system (Phase 6)
 - Inbox route remains a shell only until Phase 14
 
 ## Exact next phase
 
-**Phase 6 — Document Versioning** (current version, previous versions, replace without losing history)
+**Phase 7 — Commitments** (subscriptions, recurring payments, memberships, action URLs)
 
 ---
 
@@ -284,3 +327,4 @@ AI is a suggestion layer. Core app must work if AI is unavailable. AI must not a
 | 2026-10-02 | Phase 3 complete: bcrypt + HTTP-only session cookies, auth APIs, frontend wired, ownership foundation. Next: Phase 4 — Core LifeOS Data Model. |
 | 2026-10-02 | Phase 4 complete: core Prisma domain model + migration; no domain CRUD/UI. Next: Phase 5 — Vault / Documents. |
 | 2026-10-02 | Phase 5 complete: private vault upload/list/metadata/download/delete with ownership-checked storage. Next: Phase 6 — Document Versioning. |
+| 2026-10-02 | Phase 6 complete: document version history, replace upload, per-version download, ownership tests. Next: Phase 7 — Commitments. |

@@ -30,6 +30,7 @@ export type DocumentVersionSummaryBody = {
   sizeBytes: number | null;
   isCurrent: boolean;
   uploadedAt: string;
+  replacedAt: string | null;
 };
 
 export type DocumentResponseBody = {

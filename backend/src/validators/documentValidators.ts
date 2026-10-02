@@ -62,7 +62,7 @@ function parseOptionalDate(
   return date;
 }
 
-function parseOptionalText(
+export function parseOptionalText(
   value: unknown,
   fieldName: string,
   maxLength: number,

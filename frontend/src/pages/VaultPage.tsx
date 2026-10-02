@@ -1,16 +1,21 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import {
   createDocument,
+  createDocumentVersion,
   deleteDocument,
   DOCUMENT_CATEGORIES,
   DOCUMENT_STATUSES,
   downloadDocument,
+  downloadDocumentVersion,
   formatCategoryLabel,
   formatFileSize,
+  formatUploadedAt,
+  listDocumentVersions,
   listDocuments,
   updateDocument,
   type DocumentCategory,
   type DocumentStatus,
+  type DocumentVersionSummary,
   type VaultDocument,
 } from "../api/documents";
 import { ApiRequestError } from "../api/client";
@@ -57,6 +62,12 @@ export function VaultPage() {
   const [editStatus, setEditStatus] = useState<DocumentStatus>("ACTIVE");
   const [saving, setSaving] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [versions, setVersions] = useState<DocumentVersionSummary[]>([]);
+  const [versionsLoading, setVersionsLoading] = useState(false);
+  const [replaceFile, setReplaceFile] = useState<File | null>(null);
+  const [replaceNotes, setReplaceNotes] = useState("");
+  const [replacing, setReplacing] = useState(false);
+  const [busyVersionId, setBusyVersionId] = useState<string | null>(null);
 
   const selected = documents.find((doc) => doc.id === selectedId) ?? null;
 
@@ -77,6 +88,23 @@ export function VaultPage() {
     }
   }, []);
 
+  const loadVersions = useCallback(async (documentId: string) => {
+    setVersionsLoading(true);
+    try {
+      const items = await listDocumentVersions(documentId);
+      setVersions(items);
+    } catch (err) {
+      if (err instanceof ApiRequestError) {
+        setError(err.message);
+      } else {
+        setError("Unable to load version history.");
+      }
+      setVersions([]);
+    } finally {
+      setVersionsLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     void loadDocuments();
   }, [loadDocuments]);
@@ -85,8 +113,13 @@ export function VaultPage() {
     if (selected) {
       setEditNotes(selected.notes ?? "");
       setEditStatus(selected.status);
+      setReplaceFile(null);
+      setReplaceNotes("");
+      void loadVersions(selected.id);
+    } else {
+      setVersions([]);
     }
-  }, [selected]);
+  }, [selected, loadVersions]);
 
   async function handleUpload(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -144,9 +177,80 @@ export function VaultPage() {
     }
   }
 
+  async function handleVersionDownload(versionId: string) {
+    if (!selected) {
+      return;
+    }
+    setBusyVersionId(versionId);
+    setError(null);
+    setSuccess(null);
+    try {
+      await downloadDocumentVersion(selected.id, versionId);
+      setSuccess("Version download started.");
+    } catch (err) {
+      if (err instanceof ApiRequestError) {
+        setError(err.message);
+      } else {
+        setError("Version download failed.");
+      }
+    } finally {
+      setBusyVersionId(null);
+    }
+  }
+
+  async function handleReplaceVersion(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!selected) {
+      return;
+    }
+    if (!replaceFile) {
+      setError("Choose a file for the new version.");
+      return;
+    }
+
+    setReplacing(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      const result = await createDocumentVersion(selected.id, {
+        file: replaceFile,
+        notes: replaceNotes.trim() || undefined,
+      });
+      setDocuments((current) =>
+        current.map((doc) =>
+          doc.id === result.document.id ? result.document : doc,
+        ),
+      );
+      setReplaceFile(null);
+      setReplaceNotes("");
+      setVersions((current) => [
+        result.version,
+        ...current.map((version) =>
+          version.isCurrent
+            ? {
+                ...version,
+                isCurrent: false,
+                replacedAt: result.version.uploadedAt,
+              }
+            : version,
+        ),
+      ]);
+      setSuccess(`Version ${result.version.versionNumber} uploaded.`);
+      await loadVersions(selected.id);
+    } catch (err) {
+      if (err instanceof ApiRequestError) {
+        setError(err.message);
+      } else {
+        setError("Failed to upload new version.");
+      }
+    } finally {
+      setReplacing(false);
+    }
+  }
+
   async function handleDelete(id: string) {
     const confirmed = window.confirm(
-      "Delete this document and its stored file? This cannot be undone.",
+      "Delete this document and all stored versions? This cannot be undone.",
     );
     if (!confirmed) {
       return;
@@ -207,7 +311,7 @@ export function VaultPage() {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <PageHeader
           title="Vault"
-          description="Private documents with structured metadata. Use sample files only during development."
+          description="Private documents with structured metadata and version history. Use sample files only during development."
         />
         <Button
           type="button"
@@ -442,6 +546,7 @@ export function VaultPage() {
                       {doc.expiresOn ? ` · Expires ${doc.expiresOn}` : ""}
                     </span>
                     <span className="text-xs text-[var(--lifeos-muted)]">
+                      v{doc.currentVersion?.versionNumber ?? "—"} ·{" "}
                       {doc.currentVersion?.originalFileName ?? "No file"} ·{" "}
                       {formatFileSize(doc.currentVersion?.sizeBytes)}
                     </span>
@@ -477,8 +582,9 @@ export function VaultPage() {
                     </dd>
                   </div>
                   <div>
-                    <dt className="text-[var(--lifeos-muted)]">File</dt>
+                    <dt className="text-[var(--lifeos-muted)]">Current file</dt>
                     <dd className="font-medium text-[var(--lifeos-ink)]">
+                      v{selected.currentVersion?.versionNumber ?? "—"} ·{" "}
                       {selected.currentVersion?.originalFileName ?? "—"} (
                       {selected.currentVersion?.mimeType ?? "unknown"},{" "}
                       {formatFileSize(selected.currentVersion?.sizeBytes)})
@@ -530,6 +636,86 @@ export function VaultPage() {
                   </Button>
                 </form>
 
+                <div className="space-y-3 border-t border-[var(--lifeos-border)] pt-4">
+                  <h3 className="text-sm font-semibold text-[var(--lifeos-ink)]">
+                    Version history
+                  </h3>
+                  {versionsLoading ? (
+                    <p className="text-sm text-[var(--lifeos-muted)]">
+                      Loading versions…
+                    </p>
+                  ) : versions.length === 0 ? (
+                    <p className="text-sm text-[var(--lifeos-muted)]">
+                      No versions found.
+                    </p>
+                  ) : (
+                    <ul className="space-y-2">
+                      {versions.map((version) => (
+                        <li
+                          key={version.id}
+                          className="flex flex-col gap-2 rounded-lg border border-[var(--lifeos-border)] px-3 py-3 sm:flex-row sm:items-center sm:justify-between"
+                        >
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium text-[var(--lifeos-ink)]">
+                              Version {version.versionNumber}
+                              {version.isCurrent ? " · Current" : ""}
+                            </p>
+                            <p className="truncate text-xs text-[var(--lifeos-muted)]">
+                              {version.originalFileName ?? "file"} ·{" "}
+                              {formatFileSize(version.sizeBytes)} ·{" "}
+                              {formatUploadedAt(version.uploadedAt)}
+                              {version.replacedAt
+                                ? ` · Replaced ${formatUploadedAt(version.replacedAt)}`
+                                : ""}
+                            </p>
+                          </div>
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            onClick={() => {
+                              void handleVersionDownload(version.id);
+                            }}
+                            disabled={busyVersionId === version.id}
+                          >
+                            {busyVersionId === version.id
+                              ? "Working…"
+                              : "Download"}
+                          </Button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+
+                  <form onSubmit={handleReplaceVersion} className="space-y-3">
+                    <p className="text-sm text-[var(--lifeos-muted)]">
+                      Upload a new version without deleting prior files.
+                    </p>
+                    <Input
+                      label="New version file"
+                      name="replaceFile"
+                      type="file"
+                      accept=".pdf,.jpg,.jpeg,.png,.webp,application/pdf,image/jpeg,image/png,image/webp"
+                      onChange={(event) =>
+                        setReplaceFile(event.target.files?.[0] ?? null)
+                      }
+                    />
+                    <label className="block">
+                      <span className="mb-1.5 block text-sm font-medium text-[var(--lifeos-ink-soft)]">
+                        Version notes (optional)
+                      </span>
+                      <textarea
+                        className={`${fieldClassName()} min-h-16`}
+                        value={replaceNotes}
+                        onChange={(event) => setReplaceNotes(event.target.value)}
+                        placeholder="What changed in this version?"
+                      />
+                    </label>
+                    <Button type="submit" disabled={replacing || !replaceFile}>
+                      {replacing ? "Uploading…" : "Upload new version"}
+                    </Button>
+                  </form>
+                </div>
+
                 <div className="flex flex-wrap gap-3 border-t border-[var(--lifeos-border)] pt-4">
                   <Button
                     type="button"
@@ -538,7 +724,7 @@ export function VaultPage() {
                     }}
                     disabled={busyId === selected.id}
                   >
-                    {busyId === selected.id ? "Working…" : "Download"}
+                    {busyId === selected.id ? "Working…" : "Download current"}
                   </Button>
                   <Button
                     type="button"
@@ -555,7 +741,8 @@ export function VaultPage() {
               </div>
             ) : (
               <p className="text-sm text-[var(--lifeos-muted)]">
-                Select a document to view metadata, download, or delete it.
+                Select a document to view metadata, versions, download, or
+                delete it.
               </p>
             )}
           </div>
