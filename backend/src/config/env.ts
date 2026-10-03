@@ -83,3 +83,11 @@ export function getMaxUploadBytes(): number {
   }
   return Math.floor(parsed);
 }
+
+export function getAiServiceUrl(): string | null {
+  return process.env.AI_SERVICE_URL?.trim().replace(/\/$/, "") || null;
+}
+
+export function getAiServiceToken(): string | null {
+  return process.env.AI_SERVICE_TOKEN?.trim() || null;
+}

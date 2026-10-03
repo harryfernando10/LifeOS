@@ -3,20 +3,89 @@ import { Link } from "react-router-dom";
 import { ApiRequestError } from "../api/client";
 import { createInbox, deleteInbox, downloadInboxFile, listInbox, triageInbox, updateInbox, type InboxItem, type InboxStatus } from "../api/searchInbox";
 import { listDocuments, type VaultDocument } from "../api/documents";
+import { AIInboxReview } from "../components/AIInboxReview";
 import { Button } from "../components/ui/Button";
 import { Input } from "../components/ui/Input";
 import { PageHeader } from "../components/ui/PageHeader";
 
 const statuses: InboxStatus[] = ["UNREVIEWED", "CATEGORIZED", "DISMISSED"];
+
 export function InboxPage() {
-  const [items, setItems] = useState<InboxItem[]>([]); const [documents, setDocuments] = useState<VaultDocument[]>([]); const [filter, setFilter] = useState<InboxStatus | "ALL">("ALL"); const [selected, setSelected] = useState(""); const [title, setTitle] = useState(""); const [notes, setNotes] = useState(""); const [documentId, setDocumentId] = useState(""); const [file, setFile] = useState<File | null>(null); const [editing, setEditing] = useState(false); const [loading, setLoading] = useState(true); const [saving, setSaving] = useState(false); const [error, setError] = useState("");
-  const load = useCallback(async () => { setLoading(true); setError(""); try { const [next, docs] = await Promise.all([listInbox(filter === "ALL" ? undefined : filter), listDocuments()]); setItems(next); setDocuments(docs); setSelected(current => next.some(i => i.id === current) ? current : next[0]?.id ?? ""); } catch (e) { setError(e instanceof ApiRequestError ? e.message : "Unable to load Inbox."); } finally { setLoading(false); } }, [filter]);
+  const [items, setItems] = useState<InboxItem[]>([]);
+  const [documents, setDocuments] = useState<VaultDocument[]>([]);
+  const [filter, setFilter] = useState<InboxStatus | "ALL">("ALL");
+  const [selected, setSelected] = useState("");
+  const [title, setTitle] = useState("");
+  const [notes, setNotes] = useState("");
+  const [documentId, setDocumentId] = useState("");
+  const [file, setFile] = useState<File | null>(null);
+  const [editing, setEditing] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  const load = useCallback(async () => {
+    setLoading(true); setError("");
+    try {
+      const [next, docs] = await Promise.all([listInbox(filter === "ALL" ? undefined : filter), listDocuments()]);
+      setItems(next); setDocuments(docs);
+      setSelected(current => next.some(item => item.id === current) ? current : next[0]?.id ?? "");
+    } catch (e) { setError(e instanceof ApiRequestError ? e.message : "Unable to load Inbox."); }
+    finally { setLoading(false); }
+  }, [filter]);
   useEffect(() => { void load(); }, [load]);
-  const current = items.find(i => i.id === selected);
+
+  const current = items.find(item => item.id === selected);
   function resetForm() { setTitle(""); setNotes(""); setDocumentId(""); setFile(null); setEditing(false); }
-  async function save() { setSaving(true); setError(""); try { const item = editing && current ? await updateInbox(current.id, { title, notes: notes || null, linkedDocumentId: documentId || null }) : await createInbox({ title: title || undefined, notes: notes || undefined, linkedDocumentId: documentId || undefined, file: file ?? undefined }); await load(); setSelected(item.id); resetForm(); } catch (e) { setError(e instanceof ApiRequestError ? e.message : e instanceof Error ? e.message : "Unable to save Inbox item."); } finally { setSaving(false); } }
-  async function triage(status: InboxStatus) { if (!current) return; try { await triageInbox(current.id, status); await load(); } catch (e) { setError(e instanceof ApiRequestError ? e.message : "Unable to update item."); } }
-  async function remove() { if (!current) return; try { await deleteInbox(current.id); setSelected(""); await load(); } catch (e) { setError(e instanceof ApiRequestError ? e.message : "Unable to delete item."); } }
-  function startEdit() { if (!current) return; setTitle(current.title ?? ""); setNotes(current.notes ?? ""); setDocumentId(current.linkedDocumentId ?? ""); setEditing(true); }
-  return <section className="space-y-6"><PageHeader title="Life Inbox" description="Capture documents and life-admin notes for manual review. No automatic extraction or classification."/>{error ? <p role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p> : null}<div className="grid gap-6 xl:grid-cols-[minmax(16rem,0.8fr)_minmax(22rem,1.2fr)]"><section className="space-y-4 rounded-2xl border border-[var(--lifeos-border)] bg-white/60 p-4"><h2 className="font-semibold">Add an item</h2><Input label="Title" value={title} onChange={e => setTitle(e.target.value)} placeholder="Receipt, notice, reminder…"/><label className="block text-sm font-medium text-[var(--lifeos-ink-soft)]">Notes<textarea className="mt-1.5 min-h-24 w-full rounded-lg border border-[var(--lifeos-border)] bg-[var(--lifeos-surface)] px-3.5 py-2.5" value={notes} onChange={e => setNotes(e.target.value)} maxLength={4000}/></label><label className="block text-sm font-medium text-[var(--lifeos-ink-soft)]">Attach file (PDF, JPEG, PNG, WEBP; 10 MiB max)<input type="file" accept=".pdf,.jpg,.jpeg,.png,.webp,application/pdf,image/jpeg,image/png,image/webp" className="mt-1.5 block w-full text-sm" onChange={e => setFile(e.target.files?.[0] ?? null)}/></label><label className="block text-sm font-medium text-[var(--lifeos-ink-soft)]">Associate Vault document<select className="mt-1.5 w-full rounded-lg border border-[var(--lifeos-border)] bg-[var(--lifeos-surface)] px-3.5 py-2.5" value={documentId} onChange={e => setDocumentId(e.target.value)}><option value="">No linked document</option>{documents.map(d => <option key={d.id} value={d.id}>{d.title}</option>)}</select></label><div className="flex gap-2"><Button onClick={() => void save()} disabled={(!title.trim() && !file) || saving}>{saving ? "Saving…" : editing ? "Save changes" : "Add to Inbox"}</Button>{editing ? <Button variant="secondary" onClick={resetForm}>Cancel edit</Button> : null}</div></section><section className="space-y-4"><div className="flex flex-wrap items-center justify-between gap-3"><h2 className="font-semibold">Captured items</h2><label className="text-sm text-[var(--lifeos-muted)]">Show <select className="ml-2 rounded-md border border-[var(--lifeos-border)] bg-white px-2 py-1" value={filter} onChange={e => setFilter(e.target.value as InboxStatus | "ALL")}><option value="ALL">All</option>{statuses.map(s => <option key={s} value={s}>{s.replaceAll("_", " ")}</option>)}</select></label></div>{loading ? <p className="text-sm text-[var(--lifeos-muted)]">Loading Inbox…</p> : items.length === 0 ? <div className="rounded-2xl border border-dashed border-[var(--lifeos-border)] px-5 py-10 text-sm text-[var(--lifeos-muted)]">No items in this view. Add a note, upload a file, or link an existing Vault document.</div> : <div className="grid gap-3 md:grid-cols-2">{items.map(item => <button key={item.id} onClick={() => setSelected(item.id)} className={`rounded-xl border p-4 text-left ${selected === item.id ? "border-[var(--lifeos-accent)] bg-white" : "border-[var(--lifeos-border)] bg-white/60"}`}><span className="text-xs uppercase tracking-wide text-[var(--lifeos-muted)]">{item.status.replaceAll("_", " ")}</span><span className="mt-1 block font-medium text-[var(--lifeos-ink)]">{item.title ?? item.originalFileName ?? "Inbox item"}</span>{item.originalFileName ? <span className="mt-1 block text-xs text-[var(--lifeos-muted)]">{item.originalFileName}</span> : null}{item.linkedDocument ? <span className="mt-1 block text-xs text-[var(--lifeos-muted)]">Vault: {item.linkedDocument.title}</span> : null}</button>)}</div>}</section></div>{current ? <section className="space-y-4 rounded-2xl border border-[var(--lifeos-border)] bg-white/70 p-5"><div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="text-lg font-semibold">{current.title ?? current.originalFileName ?? "Inbox item"}</h2><p className="mt-1 text-xs uppercase tracking-wide text-[var(--lifeos-muted)]">{current.status.replaceAll("_", " ")}</p></div><div className="flex flex-wrap gap-2"><Button variant="secondary" onClick={startEdit}>Edit</Button><Button variant="secondary" onClick={() => void remove()}>Delete</Button></div></div>{current.notes ? <p className="whitespace-pre-wrap text-sm text-[var(--lifeos-ink-soft)]">{current.notes}</p> : <p className="text-sm text-[var(--lifeos-muted)]">No notes.</p>}{current.originalFileName ? <Button variant="secondary" onClick={() => void downloadInboxFile(current.id).catch(e => setError(e instanceof Error ? e.message : "Download failed."))}>Download {current.originalFileName}</Button> : null}{current.linkedDocument ? <p className="text-sm">Linked Vault document: <Link className="text-[var(--lifeos-accent)] underline" to="/app/vault">{current.linkedDocument.title}</Link></p> : null}<div className="flex flex-wrap gap-2"><span className="self-center text-sm text-[var(--lifeos-muted)]">Triage:</span>{statuses.map(s => <Button key={s} variant={current.status === s ? "primary" : "secondary"} onClick={() => void triage(s)} disabled={current.status === s}>{s.replaceAll("_", " ")}</Button>)}</div></section> : null}</section>;
+  async function save() {
+    setSaving(true); setError("");
+    try {
+      const item = editing && current
+        ? await updateInbox(current.id, { title, notes: notes || null, linkedDocumentId: documentId || null })
+        : await createInbox({ title: title || undefined, notes: notes || undefined, linkedDocumentId: documentId || undefined, file: file ?? undefined });
+      await load(); setSelected(item.id); resetForm();
+    } catch (e) { setError(e instanceof ApiRequestError ? e.message : e instanceof Error ? e.message : "Unable to save Inbox item."); }
+    finally { setSaving(false); }
+  }
+  async function triage(status: InboxStatus) {
+    if (!current) return;
+    try { await triageInbox(current.id, status); await load(); }
+    catch (e) { setError(e instanceof ApiRequestError ? e.message : "Unable to update item."); }
+  }
+  async function remove() {
+    if (!current) return;
+    try { await deleteInbox(current.id); setSelected(""); await load(); }
+    catch (e) { setError(e instanceof ApiRequestError ? e.message : "Unable to delete item."); }
+  }
+  function startEdit() {
+    if (!current) return;
+    setTitle(current.title ?? ""); setNotes(current.notes ?? ""); setDocumentId(current.linkedDocumentId ?? ""); setEditing(true);
+  }
+
+  return <section className="space-y-6">
+    <PageHeader title="Life Inbox" description="Capture documents and life-admin notes for review. Use optional AI suggestions, then confirm what belongs in your Vault or purchases." />
+    {error ? <p role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p> : null}
+    <div className="grid gap-6 xl:grid-cols-[minmax(16rem,0.8fr)_minmax(22rem,1.2fr)]">
+      <section className="space-y-4 rounded-2xl border border-[var(--lifeos-border)] bg-white/60 p-4">
+        <h2 className="font-semibold">Add an item</h2>
+        <Input label="Title" value={title} onChange={e => setTitle(e.target.value)} placeholder="Receipt, notice, reminder…" />
+        <label className="block text-sm font-medium text-[var(--lifeos-ink-soft)]">Notes<textarea className="mt-1.5 min-h-24 w-full rounded-lg border border-[var(--lifeos-border)] bg-[var(--lifeos-surface)] px-3.5 py-2.5" value={notes} onChange={e => setNotes(e.target.value)} maxLength={4000} /></label>
+        <label className="block text-sm font-medium text-[var(--lifeos-ink-soft)]">Attach file (PDF, JPEG, PNG, WEBP; 10 MiB max)<input type="file" accept=".pdf,.jpg,.jpeg,.png,.webp,application/pdf,image/jpeg,image/png,image/webp" className="mt-1.5 block w-full text-sm" onChange={e => setFile(e.target.files?.[0] ?? null)} /></label>
+        <label className="block text-sm font-medium text-[var(--lifeos-ink-soft)]">Associate Vault document<select className="mt-1.5 w-full rounded-lg border border-[var(--lifeos-border)] bg-[var(--lifeos-surface)] px-3.5 py-2.5" value={documentId} onChange={e => setDocumentId(e.target.value)}><option value="">No linked document</option>{documents.map(doc => <option key={doc.id} value={doc.id}>{doc.title}</option>)}</select></label>
+        <div className="flex gap-2"><Button onClick={() => void save()} disabled={(!title.trim() && !file) || saving}>{saving ? "Saving…" : editing ? "Save changes" : "Add to Inbox"}</Button>{editing ? <Button variant="secondary" onClick={resetForm}>Cancel edit</Button> : null}</div>
+      </section>
+      <section className="space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-3"><h2 className="font-semibold">Captured items</h2><label className="text-sm text-[var(--lifeos-muted)]">Show <select className="ml-2 rounded-md border border-[var(--lifeos-border)] bg-white px-2 py-1" value={filter} onChange={e => setFilter(e.target.value as InboxStatus | "ALL")}><option value="ALL">All</option>{statuses.map(status => <option key={status} value={status}>{status.replaceAll("_", " ")}</option>)}</select></label></div>
+        {loading ? <p className="text-sm text-[var(--lifeos-muted)]">Loading Inbox…</p> : items.length === 0 ? <div className="rounded-2xl border border-dashed border-[var(--lifeos-border)] px-5 py-10 text-sm text-[var(--lifeos-muted)]">No items in this view. Add a note, upload a file, or link an existing Vault document.</div> : <div className="grid gap-3 md:grid-cols-2">{items.map(item => <button key={item.id} onClick={() => setSelected(item.id)} className={`rounded-xl border p-4 text-left ${selected === item.id ? "border-[var(--lifeos-accent)] bg-white" : "border-[var(--lifeos-border)] bg-white/60"}`}><span className="text-xs uppercase tracking-wide text-[var(--lifeos-muted)]">{item.status.replaceAll("_", " ")}</span><span className="mt-1 block font-medium text-[var(--lifeos-ink)]">{item.title ?? item.originalFileName ?? "Inbox item"}</span>{item.originalFileName ? <span className="mt-1 block text-xs text-[var(--lifeos-muted)]">{item.originalFileName}</span> : null}{item.linkedDocument ? <span className="mt-1 block text-xs text-[var(--lifeos-muted)]">Vault: {item.linkedDocument.title}</span> : null}</button>)}</div>}
+      </section>
+    </div>
+    {current ? <section className="space-y-4 rounded-2xl border border-[var(--lifeos-border)] bg-white/70 p-5">
+      <div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="text-lg font-semibold">{current.title ?? current.originalFileName ?? "Inbox item"}</h2><p className="mt-1 text-xs uppercase tracking-wide text-[var(--lifeos-muted)]">{current.status.replaceAll("_", " ")}</p></div><div className="flex flex-wrap gap-2"><Button variant="secondary" onClick={startEdit}>Edit</Button><Button variant="secondary" onClick={() => void remove()}>Delete</Button></div></div>
+      {current.notes ? <p className="whitespace-pre-wrap text-sm text-[var(--lifeos-ink-soft)]">{current.notes}</p> : <p className="text-sm text-[var(--lifeos-muted)]">No notes.</p>}
+      {current.originalFileName ? <Button variant="secondary" onClick={() => void downloadInboxFile(current.id).catch(e => setError(e instanceof Error ? e.message : "Download failed."))}>Download {current.originalFileName}</Button> : null}
+      {current.linkedDocument ? <p className="text-sm">Linked Vault document: <Link className="text-[var(--lifeos-accent)] underline" to="/app/vault">{current.linkedDocument.title}</Link></p> : null}
+      {(current.originalFileName || current.linkedDocumentId) ? <AIInboxReview key={current.id} inboxId={current.id} inboxTitle={current.title ?? current.originalFileName ?? "Inbox item"} onSaved={() => void load()} /> : null}
+      <div className="flex flex-wrap gap-2"><span className="self-center text-sm text-[var(--lifeos-muted)]">Triage:</span>{statuses.map(status => <Button key={status} variant={current.status === status ? "primary" : "secondary"} onClick={() => void triage(status)} disabled={current.status === status}>{status.replaceAll("_", " ")}</Button>)}</div>
+    </section> : null}
+  </section>;
 }

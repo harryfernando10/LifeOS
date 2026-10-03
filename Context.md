@@ -2,17 +2,17 @@
 
 **Purpose:** Living implementation state for agents and developers. Read this before writing code.
 
-**Last updated:** 2026-10-03 (Phase 13 complete)
+**Last updated:** 2026-10-03 (Phase 14 complete)
 
 ---
 
 ## Current Phase
 
-Phase 13 — Search + Life Inbox (complete)
+Phase 14 — AI Intelligence (complete)
 
 ## Status
 
-Phase 13 complete. Authenticated deterministic search spans documents and versions, subscriptions, recurring payments, purchases, warranties, deadlines, renewals, and Inbox items; all queries are scoped to `req.authUser.id`. Life Inbox supports structured capture, private PDF/image uploads, authenticated download, list/filter, inspect, edit, manual status triage, deletion, and optional links to owned Vault documents. No AI/OCR/classification was added. One additive migration introduces `InboxItem.linkedDocumentId`. Full backend suite passes (67 tests); backend/frontend builds and type checks pass. Current branch: `master`; latest commit is the focused Phase 13 commit containing this handoff (HEAD); working tree is clean after commit.
+Phase 14 is complete. The isolated FastAPI OCR/suggestion service, authenticated backend mediation, typed suggestion contract, Inbox review UI, and confirmed document/Purchase/Warranty workflows are implemented. Real Tesseract OCR 5.5.3 was verified using a process-local `TESSERACT_CMD` for a synthetic image and scanned PDF; text-based PDFs use direct extraction. The AI provider remains optional and unconfigured by default. No Phase 14 database migration was needed. Current branch: `master`; latest commit is the focused Phase 14 completion commit (`HEAD`); nothing was pushed.
 
 ## Completed
 
@@ -81,10 +81,17 @@ Phase 13 complete. Authenticated deterministic search spans documents and versio
   - Structured Inbox capture with private PDF/image uploads, list/detail/edit/filter/manual status triage/delete; optional owned Vault document association
   - One migration adds InboxItem → Document optional association; no duplicate Inbox model
   - No AI, OCR, extraction, or automated classification
+- Phase 14 — AI Intelligence (complete)
+  - Optional isolated FastAPI service; backend remains responsible for authentication, ownership, storage access, validation, and domain writes
+  - Direct text extraction for text PDFs; OCR route for scanned PDFs and JPEG/PNG/WEBP images
+  - Provider adapter is OpenAI-compatible and off unless explicitly configured; model output is structured and validated by both Python and Node
+  - Inbox review presents extracted text and editable suggestions; document, Purchase, and optional explicitly dated Warranty saves require user confirmation through existing domain services
+  - Extracted text and suggestions are transient; no Prisma schema change or migration
+  - Unit/integration coverage passes with mocked provider/OCR; real Tesseract 5.5.3 verified against synthetic image, scanned PDF, and text PDF
 
 ## Next Task
 
-Phase 14 — AI Intelligence
+Phase 15 — Command Center + Notifications
 
 ---
 
@@ -107,6 +114,18 @@ Copy env examples before first run:
 
 - `frontend/.env.example` → `frontend/.env`
 - `backend/.env.example` → `backend/.env`
+
+Optional AI service setup (AI remains off until configured):
+
+```bash
+cd ai-service
+python -m venv .venv
+.venv/Scripts/activate
+pip install -r requirements.txt
+uvicorn main:app --host 127.0.0.1 --port 8000
+```
+
+Copy `ai-service/.env.example` to `ai-service/.env` and set a shared random `AI_SERVICE_TOKEN` in both AI service and backend environments. Set `AI_SERVICE_URL=http://127.0.0.1:8000` in the backend. For AI suggestions only, configure `AI_PROVIDER=openai_compatible`, `AI_API_KEY`, and `AI_MODEL` inside the AI service. Tesseract OCR executable must also be installed locally (or configured with `TESSERACT_CMD`). Do not commit any `.env` files.
 
 Required backend env: `DATABASE_URL`, `SESSION_SECRET` (min 32 characters). Never commit `.env` files.
 
@@ -594,7 +613,7 @@ Logout deletes the server session and clears the cookie.
 
 ## Exact next phase
 
-**Phase 14 — AI Intelligence**
+**Phase 15 — Command Center + Notifications**
 
 ---
 
@@ -651,6 +670,7 @@ AI is a suggestion layer. Core app must work if AI is unavailable. AI must not a
 | 2026-10-03 | Phase 11 complete: derived Timeline chronological view (±365 days). Next: Phase 12 — Financial Commitments. |
 | 2026-10-03 | Phase 12 complete: derived financial 7/30/365 overview from ACTIVE subscriptions + recurring payments. Next: Phase 13 — Search. |
 | 2026-10-03 | Phase 13 complete: ownership-scoped search and structured Life Inbox with manual triage and Vault association. Migration `20261003100000_inbox_document_link`; 67 backend tests pass. Next: Phase 14 — AI Intelligence. |
+| 2026-10-03 | Phase 14 complete: optional FastAPI extraction/suggestion service, owner-scoped Node mediation, Inbox review and confirmation into existing Document/Purchase/Warranty workflows; no schema change. Backend 75/75 tests, AI service 11/11 tests, Prisma checks, backend/frontend typechecks and builds pass. Real Tesseract 5.5.3 verified on a synthetic image and scanned PDF; text PDF direct extraction also verified. AI provider remains optional/unconfigured. Next: Phase 15. |
 
 ---
 
@@ -669,3 +689,24 @@ AI is a suggestion layer. Core app must work if AI is unavailable. AI must not a
 - **Architectural decisions:** Search composes existing Prisma models in one service; inbox reuses InboxItem and its status enum, adding only the needed Vault association; private attachments use the existing FileStorageService and validated PDF/image upload path; storage keys are never returned; all domain queries carry `userId` from the authenticated request; manual triage maps to existing statuses (`UNREVIEWED`, `CATEGORIZED`, `DISMISSED`).
 - **Git:** Branch `master`; latest commit is this focused Phase 13 handoff commit (HEAD); working tree is clean after commit.
 - **Next phase:** Phase 14 — AI Intelligence.
+
+---
+
+## Phase 14 handoff (2026-10-03)
+
+- **Status:** COMPLETE.
+- **Completed:** Optional FastAPI service; backend-authenticated processing for owned Inbox items and Vault documents; PDF text extraction before OCR fallback; image OCR path for JPEG/PNG/WEBP; structured document/receipt suggestion contract; backend revalidation; Inbox review/edit/reject UI; explicit Vault document confirmation; confirmed Purchase creation through existing Purchase API; optional Warranty upsert only when the user opts in and supplies/confirms an end date. AI failures, missing configuration, unsupported/corrupt files, empty text, provider failures, malformed responses, and OCR unavailability return explicit errors.
+- **Remaining/blocker:** No Phase 14 implementation remains. No live AI provider or API key is configured; this is optional by design. AI provider behavior is verified using mocks. The local `TESSERACT_CMD` was set only in verification process environments; the machine-specific executable path is not in tracked source/configuration.
+- **AI architecture:** React calls Express only. Express requires session authentication, retrieves files only after `userId` ownership filters, reads bytes using `FileStorageService`, and calls `AI_SERVICE_URL/v1/process` using the private shared `AI_SERVICE_TOKEN`. The FastAPI service has no database or storage access. Non-loopback AI-service and provider URLs require HTTPS. The configured OpenAI-compatible provider receives extracted text only; images and original files are processed by the local OCR service. Provider-specific HTTP/JSON handling is isolated in `ai-service/main.py`.
+- **OCR architecture:** pypdf extracts text from text-based PDFs. Empty-text PDFs are rendered page-by-page with PyMuPDF and OCRed with Pillow + pytesseract; image files go directly to local OCR. Scanned PDFs are limited to 20 pages per request; images above 40 megapixels are rejected. Tesseract can be selected with `TESSERACT_CMD`. The original file remains unchanged in private storage. OCR output is transient and returned only to the owning user.
+- **Provider expectations:** `AI_PROVIDER=none` is the default, so requests fail clearly with `AI_UNAVAILABLE`; no fake output is returned. The only adapter implemented is `openai_compatible`, requiring a configured key and model in the AI service. Tests use deterministic mocks; no API call or paid provider is required to run the core app. UI explains that content may be sent to the configured external provider.
+- **Environment variables introduced:** Backend `AI_SERVICE_URL`, `AI_SERVICE_TOKEN`. AI service `AI_SERVICE_TOKEN`, `AI_PROVIDER`, `AI_API_KEY`, `AI_MODEL`, `AI_API_BASE_URL`, `TESSERACT_CMD`. Examples are in root/backend `.env.example` and `ai-service/.env.example`; no secret values are stored in tracked files.
+- **Database/migrations:** None. Existing `Document`, `DocumentVersion`, `InboxItem`, `Purchase`, `Warranty`, and `AuditLog` are reused. Extracted text and suggestions are not persisted. Confirmation calls existing Document/Purchase/Warranty domain logic and audit logging.
+- **API:** `POST /api/ai/inbox/:id/process`; `POST /api/ai/documents/:id/process`; `POST /api/ai/inbox/:id/confirm-document`. All require existing session auth. Purchase and Warranty confirmation use existing `POST /api/purchases` and `PUT /api/purchases/:id/warranty` endpoints.
+- **Frontend:** `AIInboxReview` is integrated into the existing protected `/app/inbox` page. It exposes idle, processing, errors, extracted text, editable document/receipt suggestions, reject, confirmation, and optional warranty form. Existing Vault documents can be linked to Inbox and processed from that review. No new route was added.
+- **Result contract:** `AIProcessResponse` contains `extractedText`, `textSource` (`pdf-text` or `ocr`), `externalProviderUsed`, and a discriminated `suggestion.kind` (`document` or `receipt`). Document values use the existing `DocumentCategory` enum and supported Document fields. Receipt values map to Purchase fields. Warranty values are optional and accepted only as suggestions; LifeOS never infers a warranty duration. Both service and Node reject malformed output.
+- **Real OCR verification:** Tesseract reported version `5.5.3.20260724`. A synthetic PNG containing `LIFEOS OCR TEST 4829` returned exactly `LIFEOS OCR TEST 4829`. A synthetic image-based PDF followed the `ocr` path and returned `LIFEOS OCR TEST 4829`. A synthetic text PDF followed the `pdf-text` path and returned `SYNTHETIC TEXT PDF 7316`. Temporary fixtures were created outside the repository and removed automatically. `TESSERACT_CMD` was set only for these local commands; no machine-specific value was saved in project files.
+- **Tests/results:** `backend/src/ai/ai.test.ts` adds 8 mocked integration tests covering auth, ownership, unavailable configuration, validated suggestions, malformed output, no mutation before confirmation, Vault/Purchase confirmation, explicit and absent warranty dates, and document ownership. `ai-service/test_main.py` has 11 unit tests covering text PDF, scanned PDF/image OCR paths with mocked OCR, missing Tesseract, OCR failure, unsupported/corrupt files, empty text, AI unavailable/provider failure, malformed suggestions, and service-token enforcement. `backend npm test`: 75/75 pass. Python `python -m unittest -v`: 11/11 pass (with local Tesseract path configured). Prisma validate/generate pass. Backend/frontend typechecks and builds pass. `git diff --check` passes.
+- **Security/privacy:** No frontend API key; raw paths/storage keys are not returned; service token is shared only through environment variables; no AI-side database access; files remain private and are read only after owner checks; API calls are HTTPS outside loopback; provider sends extracted text only; user confirms before any domain writes; writes use existing validators, ownership checks, and audits; provider tests are mocked. Existing `.env` files and private-storage contents were not staged or inspected for values.
+- **Git:** Branch `master`; latest commit is the focused `feat: complete phase 14 - ai intelligence` handoff commit (`HEAD`); nothing was pushed.
+- **Next:** Phase 15 — Command Center + Notifications.
