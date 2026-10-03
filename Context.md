@@ -2,17 +2,17 @@
 
 **Purpose:** Living implementation state for agents and developers. Read this before writing code.
 
-**Last updated:** 2026-10-03 (Phase 10 complete)
+**Last updated:** 2026-10-03 (Phase 11 complete)
 
 ---
 
 ## Current Phase
 
-Phase 10 — Action Center (complete)
+Phase 11 — Timeline (complete)
 
 ## Status
 
-Phase 10 complete. Home Action Center aggregates overdue and upcoming attention items for the authenticated user from existing domain records (derived, not persisted). Ownership isolation enforced. No schema migration required. Phases 3–9 remain intact.
+Phase 11 complete. Timeline aggregates a chronological view of life-admin events for the authenticated user from existing domain records (derived, not persisted). Default window: past 365 + next 365 days. Ownership isolation enforced. No schema migration required. Phases 3–10 remain intact.
 
 ## Completed
 
@@ -64,12 +64,17 @@ Phase 10 complete. Home Action Center aggregates overdue and upcoming attention 
   - `GET /api/action-center` with overdue vs upcoming (30-day window)
   - Home `/app/home` consumes Action Center: loading/empty/error/list
   - Focused ownership, overdue/upcoming, multi-source, empty-state tests
+- Phase 11 — Timeline
+  - Derived chronological aggregation (no TimelineEvent table)
+  - `GET /api/timeline` for authenticated user
+  - `/app/timeline` UI: loading/empty/error/chronological list
+  - Focused ownership, sort, multi-source, null-date, empty-state tests
 
 ## Next Task
 
-Phase 11 — Timeline
+Phase 12 — Financial Commitments
 
-Do not start Phase 11 until explicitly instructed (unless continuing an assigned multi-phase batch).
+Do not start Phase 12 until explicitly instructed (unless continuing an assigned multi-phase batch).
 
 ---
 
@@ -353,7 +358,6 @@ Logout deletes the server session and clears the cookie.
 
 ### Intentionally deferred
 
-- Timeline chronological aggregation (Phase 11)
 - Financial 7/30/365 commitment overview (Phase 12)
 - Notifications / push / email (Phase 15+)
 - Search / Ctrl+K (Phase 13)
@@ -361,11 +365,52 @@ Logout deletes the server session and clears the cookie.
 
 ---
 
+## Phase 11 Timeline decisions
+
+| Decision | Choice |
+| --- | --- |
+| Persistence | **Derived** aggregation — no `TimelineEvent` table (SDD: Timeline is a derived view) |
+| Endpoint | `GET /api/timeline` (auth required) |
+| Window | **Past 365 + next 365 days** (specs leave ranges unfinalized; sensible default, documented here) |
+| Sources (FR-TL-01) | Deadlines (`dueOn`); renewals (`dueOn`); ACTIVE/EXPIRED documents with `expiresOn`; subscriptions with `nextBillingOn`; recurring payments with `nextDueOn`; warranties by `endsOn` |
+| Exclusions | ARCHIVED documents; records outside the ±365-day window; null optional dates (`nextBillingOn`, `nextDueOn`, `expiresOn`) |
+| Status scope | Broader than Action Center: deadlines/renewals of any status (including COMPLETED) appear as historical/scheduled events; commitments included whenever a date is set |
+| Sort | Chronological ascending by date, then type, then title |
+| Temporal labels | `past` / `today` / `upcoming` relative to UTC start-of-day |
+| Date handling | `@db.Date` fields serialized as `YYYY-MM-DD` via UTC ISO slice; no invented times |
+| Recurrence | **No expansion** — one entry per stored `nextBillingOn` / `nextDueOn` (algorithm deferred; not a calendar product) |
+| Navigation | `href` to existing shell routes; optional external `actionUrl` when present |
+| Authorization | Every underlying query filters by `req.authUser.id` |
+| UI filters | None in this phase (All/Past/Upcoming tabs deferred; specs do not require them yet) |
+| Deferred | Configurable ranges, recurrence expansion, purchase/document-upload events, Phase 12 financial windows |
+
+### Timeline API
+
+| Method | Path | Auth | Notes |
+| --- | --- | --- | --- |
+| GET | `/api/timeline` | Yes | Chronological event list for current user |
+
+### Frontend
+
+- `/app/timeline` loads Timeline (loading / empty / error / chronological list)
+- Nav item "Timeline" already present in AppShell (Phase 1); wired to functional page
+- Shows temporal badge, type, status, title, detail, date, Open link, optional external action URL
+
+### Intentionally deferred
+
+- Financial 7/30/365 commitment overview (Phase 12)
+- Configurable Timeline ranges / type filters
+- Recurrence occurrence expansion
+- Purchase dates / document upload events (not in FR-TL-01)
+- Notifications / Search / Ctrl+K
+
+---
+
 ## Important files
 
-### Backend (Phase 3–10)
+### Backend (Phase 3–11)
 
-- `backend/prisma/schema.prisma` — auth + full core domain model (unchanged in Phases 5–10)
+- `backend/prisma/schema.prisma` — auth + full core domain model (unchanged in Phases 5–11)
 - `backend/prisma/migrations/20261002083250_init/` — Phase 2
 - `backend/prisma/migrations/20261002090909_auth_sessions/` — Phase 3
 - `backend/prisma/migrations/20261002092710_core_domain_model/` — Phase 4
@@ -375,11 +420,13 @@ Logout deletes the server session and clears the cookie.
 - `backend/src/services/purchaseService.ts` — purchases + warranties
 - `backend/src/services/renewalService.ts` / `deadlineService.ts`
 - `backend/src/services/actionCenterService.ts` — derived Action Center aggregation
+- `backend/src/services/timelineService.ts` — derived Timeline aggregation
 - `backend/src/controllers/documentController.ts` / `routes/documentRoutes.ts`
 - `backend/src/controllers/subscriptionController.ts` / `recurringPaymentController.ts`
 - `backend/src/controllers/purchaseController.ts` / `routes/purchaseRoutes.ts`
 - `backend/src/controllers/renewalController.ts` / `deadlineController.ts`
 - `backend/src/controllers/actionCenterController.ts` / `routes/actionCenterRoutes.ts`
+- `backend/src/controllers/timelineController.ts` / `routes/timelineRoutes.ts`
 - `backend/src/routes/renewalDeadlineRoutes.ts`
 - `backend/src/routes/commitmentRoutes.ts`
 - `backend/src/validators/commitmentValidators.ts`
@@ -391,6 +438,7 @@ Logout deletes the server session and clears the cookie.
 - `backend/src/purchases/purchases.test.ts` — Phase 8 tests
 - `backend/src/renewals/renewalsDeadlines.test.ts` — Phase 9 tests
 - `backend/src/actionCenter/actionCenter.test.ts` — Phase 10 tests
+- `backend/src/timeline/timeline.test.ts` — Phase 11 tests
 - Auth stack unchanged: `authService`, `requireAuth`, `assertOwnership`, auth routes
 
 ### Frontend
@@ -401,10 +449,12 @@ Logout deletes the server session and clears the cookie.
 - `frontend/src/api/purchases.ts` — purchase + warranty client
 - `frontend/src/api/renewalsDeadlines.ts` — renewal + deadline client
 - `frontend/src/api/actionCenter.ts` — Action Center client
+- `frontend/src/api/timeline.ts` — Timeline client
 - `frontend/src/pages/CommitmentsPage.tsx` — Commitments UI (incl. Purchases tab)
 - `frontend/src/components/PurchasesPanel.tsx` — Purchases/warranties UI
 - `frontend/src/pages/RenewalsPage.tsx` — Renewals & Deadlines UI
 - `frontend/src/pages/HomePage.tsx` — Action Center Home UI
+- `frontend/src/pages/TimelinePage.tsx` — Timeline UI
 - `frontend/src/api/client.ts` — FormData-aware requests
 
 ## API endpoints
@@ -439,13 +489,14 @@ Logout deletes the server session and clears the cookie.
 | GET/POST | `/api/deadlines` | Yes | Deadline list/create |
 | GET/PATCH/DELETE | `/api/deadlines/:id` | Yes | Deadline read/update/delete |
 | GET | `/api/action-center` | Yes | Derived attention list |
+| GET | `/api/timeline` | Yes | Derived chronological timeline |
 
 ## Tests / checks performed
 
-- `npx prisma validate` — pass (no Phase 10 migration)
+- `npx prisma validate` — pass (no Phase 11 migration)
 - `npx prisma migrate status` — Database schema is up to date (3 migrations)
 - Backend `npm run typecheck` / `npm run build` — pass
-- Backend `npm test` — 52 pass (Phases 3–10; 4 Phase 10 Action Center tests)
+- Backend `npm test` — 56 pass (Phases 3–11; 4 Phase 11 Timeline tests)
 - Frontend `npm run typecheck` / `npm run build` — pass
 - `git diff --check` — pass
 
@@ -461,7 +512,8 @@ Logout deletes the server session and clears the cookie.
 - Phase 7: `feat: complete phase 7 - commitments`
 - Phase 8: `feat: complete phase 8 - purchases and warranties`
 - Phase 9: `feat: complete phase 9 - renewals and deadlines`
-- Phase 10 commit expected: `feat: complete phase 10 - action center`
+- Phase 10: `feat: complete phase 10 - action center`
+- Phase 11 commit expected: `feat: complete phase 11 - timeline`
 - No remote configured; do not push unless explicitly requested
 
 ## Known issues / blockers
@@ -481,11 +533,12 @@ Logout deletes the server session and clears the cookie.
 - Purchases reuse Phase 4 Purchase/Warranty; receipt links to existing Vault documents only — no OCR (Phase 8)
 - Renewals/Deadlines reuse Phase 4 models; kinds are enum data, not product modules; no fake payment/renewal (Phase 9)
 - Action Center is a derived query service over owned records — not a stored ActionItem entity; 30-day upcoming window (Phase 10)
+- Timeline is a derived chronological query over owned FR-TL-01 sources — not a stored TimelineEvent entity; ±365-day default window; no recurrence expansion (Phase 11)
 - Inbox route remains a shell only until Phase 14
 
 ## Exact next phase
 
-**Phase 11 — Timeline**
+**Phase 12 — Financial Commitments**
 
 ---
 
