@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import {
   formatSourceLabel,
   formatUrgencyLabel,
@@ -16,6 +16,7 @@ function urgencyClassName(urgency: ActionCenterItem["urgency"]): string {
 }
 
 export function HomePage() {
+  const [searchParams] = useSearchParams();
   const [items, setItems] = useState<ActionCenterItem[]>([]);
   const [windowDays, setWindowDays] = useState(30);
   const [loading, setLoading] = useState(true);
@@ -43,12 +44,16 @@ export function HomePage() {
     void load();
   }, [load]);
 
-  const overdueCount = items.filter((item) => item.urgency === "overdue").length;
+  const sourceFilter = searchParams.get("source");
+  const urgencyFilter = searchParams.get("urgency");
+  const visibleItems = items.filter(item => (!sourceFilter || item.sourceType === sourceFilter) && (!urgencyFilter || item.urgency === urgencyFilter));
+  const overdueCount = visibleItems.filter((item) => item.urgency === "overdue").length;
+  const viewTitle = sourceFilter === "deadline" ? "Upcoming deadlines" : sourceFilter === "renewal" ? "Upcoming renewals" : sourceFilter === "document" ? "Expiring documents" : urgencyFilter === "overdue" ? "Overdue items" : "Home";
 
   return (
     <section className="space-y-8">
       <PageHeader
-        title="Home"
+        title={viewTitle}
         description="What needs my attention? A calm list of overdue and upcoming items from your records."
       />
 
@@ -60,10 +65,10 @@ export function HomePage() {
 
       {loading ? (
         <p className="text-sm text-[var(--lifeos-muted)]">Loading…</p>
-      ) : items.length === 0 ? (
+      ) : visibleItems.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-[var(--lifeos-border)] bg-white/50 px-5 py-10">
           <p className="text-sm font-medium text-[var(--lifeos-ink-soft)]">
-            Nothing needs attention
+            Nothing needs attention in this view
           </p>
           <p className="mt-2 max-w-md text-sm leading-relaxed text-[var(--lifeos-muted)]">
             No overdue or upcoming items in the next {windowDays} days. Add
@@ -74,7 +79,7 @@ export function HomePage() {
       ) : (
         <div className="space-y-4">
           <p className="text-sm text-[var(--lifeos-muted)]">
-            {items.length} item{items.length === 1 ? "" : "s"}
+            {visibleItems.length} item{visibleItems.length === 1 ? "" : "s"}
             {overdueCount > 0
               ? ` · ${overdueCount} overdue`
               : ""}{" "}
@@ -82,7 +87,7 @@ export function HomePage() {
           </p>
 
           <ul className="space-y-3">
-            {items.map((item) => (
+            {visibleItems.map((item) => (
               <li key={item.id}>
                 <div className="rounded-xl border border-[var(--lifeos-border)] bg-white/70 px-4 py-3">
                   <div className="flex flex-wrap items-start justify-between gap-3">

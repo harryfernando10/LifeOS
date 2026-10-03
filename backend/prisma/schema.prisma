@@ -347,7 +347,7 @@ model InboxItem {
   @@map("inbox_items")
 }
 
-/// In-app notification record (delivery/scheduling in Phase 18).
+/// In-app derived reminder with persistent read state and a soft source reference.
 model Notification {
   id               String           @id @default(cuid())
   userId           String           @map("user_id")
@@ -358,9 +358,12 @@ model Notification {
   /// Optional soft reference to a domain row (resolved in later phases).
   relatedEntityType String?         @map("related_entity_type")
   relatedEntityId   String?         @map("related_entity_id")
+  sourceDueOn       DateTime?        @map("source_due_on") @db.Date
   readAt           DateTime?        @map("read_at")
+  dismissedAt       DateTime?        @map("dismissed_at")
   createdAt        DateTime         @default(now()) @map("created_at")
 
+  @@unique([userId, relatedEntityType, relatedEntityId, sourceDueOn])
   @@index([userId])
   @@index([userId, readAt])
   @@index([userId, createdAt])

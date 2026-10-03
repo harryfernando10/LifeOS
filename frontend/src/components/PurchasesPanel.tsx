@@ -60,7 +60,7 @@ function optionalOrNull(value: string): string | null {
   return trimmed.length === 0 ? null : trimmed;
 }
 
-export function PurchasesPanel() {
+export function PurchasesPanel({ openCreateRequested = false, onCreateRequestHandled }: { openCreateRequested?: boolean; onCreateRequestHandled?: () => void } = {}) {
   const [purchases, setPurchases] = useState<Purchase[]>([]);
   const [documents, setDocuments] = useState<VaultDocument[]>([]);
   const [loading, setLoading] = useState(true);
@@ -117,6 +117,13 @@ export function PurchasesPanel() {
     setError(null);
     setSuccess(null);
   }
+
+  useEffect(() => {
+    if (openCreateRequested) {
+      beginCreate();
+      onCreateRequestHandled?.();
+    }
+  }, [openCreateRequested, onCreateRequestHandled]);
 
   function beginEdit(item: Purchase) {
     setEditingId(item.id);

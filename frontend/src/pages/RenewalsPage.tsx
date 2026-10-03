@@ -24,6 +24,7 @@ import {
 import { Button } from "../components/ui/Button";
 import { Input } from "../components/ui/Input";
 import { PageHeader } from "../components/ui/PageHeader";
+import { useSearchParams } from "react-router-dom";
 
 type LifecycleTab = "renewals" | "deadlines";
 
@@ -75,6 +76,7 @@ function optionalOrNull(value: string): string | null {
 }
 
 export function RenewalsPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [tab, setTab] = useState<LifecycleTab>("renewals");
   const [renewals, setRenewals] = useState<Renewal[]>([]);
   const [deadlines, setDeadlines] = useState<Deadline[]>([]);
@@ -121,6 +123,17 @@ export function RenewalsPage() {
   useEffect(() => {
     void loadAll();
   }, [loadAll]);
+
+  useEffect(() => {
+    const action = searchParams.get("action");
+    const tab = searchParams.get("tab");
+    if (tab === "renewals" || tab === "deadlines") setTab(tab);
+    if (action === "renewal" || action === "deadline") {
+      setTab(action === "renewal" ? "renewals" : "deadlines");
+      setShowForm(true);
+    }
+    if (action || tab) setSearchParams({}, { replace: true });
+  }, [searchParams, setSearchParams]);
 
   function resetForms() {
     setRenewalForm(emptyRenewalForm);

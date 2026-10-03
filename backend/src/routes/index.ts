@@ -10,6 +10,7 @@ import { renewalDeadlineRouter } from "./renewalDeadlineRoutes.js";
 import { timelineRouter } from "./timelineRoutes.js";
 import { searchInboxRouter } from "./searchInboxRoutes.js";
 import { aiRouter } from "./aiRoutes.js";
+import { notificationRouter } from "./notificationRoutes.js";
 
 export const apiRouter = Router();
 
@@ -24,3 +25,4 @@ apiRouter.use(timelineRouter);
 apiRouter.use(financialCommitmentRouter);
 apiRouter.use(searchInboxRouter);
 apiRouter.use(aiRouter);
+apiRouter.use(notificationRouter);

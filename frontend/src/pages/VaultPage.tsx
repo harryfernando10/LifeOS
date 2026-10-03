@@ -22,6 +22,7 @@ import { ApiRequestError } from "../api/client";
 import { Button } from "../components/ui/Button";
 import { Input } from "../components/ui/Input";
 import { PageHeader } from "../components/ui/PageHeader";
+import { useSearchParams } from "react-router-dom";
 
 type UploadFormState = {
   title: string;
@@ -50,6 +51,7 @@ function fieldClassName(): string {
 }
 
 export function VaultPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [documents, setDocuments] = useState<VaultDocument[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -108,6 +110,13 @@ export function VaultPage() {
   useEffect(() => {
     void loadDocuments();
   }, [loadDocuments]);
+
+  useEffect(() => {
+    if (searchParams.get("action") === "add") {
+      setShowUpload(true);
+      setSearchParams({}, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
 
   useEffect(() => {
     if (selected) {

@@ -1,6 +1,9 @@
+import { useEffect, useRef, useState } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useAuth } from "../../auth/AuthContext";
 import { Button } from "../ui/Button";
+import { CommandCenter } from "./CommandCenter";
+import { NotificationsButton } from "./NotificationsButton";
 
 const navItems = [
   { to: "/app/home", label: "Home" },
@@ -16,6 +19,34 @@ const navItems = [
 export function AppShell() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const [commandOpen, setCommandOpen] = useState(false);
+  const commandReturnFocus = useRef<HTMLElement | null>(null);
+
+  function openCommandCenter() {
+    commandReturnFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    setCommandOpen(true);
+  }
+
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      const target = event.target as HTMLElement | null;
+      const typing = !!target && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName));
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k" && !event.altKey && !typing) {
+        event.preventDefault();
+        if (commandOpen) setCommandOpen(false); else openCommandCenter();
+      }
+      if (event.key === "Escape" && commandOpen) setCommandOpen(false);
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [commandOpen]);
+
+  useEffect(() => {
+    if (!commandOpen && commandReturnFocus.current) {
+      commandReturnFocus.current.focus();
+      commandReturnFocus.current = null;
+    }
+  }, [commandOpen]);
 
   async function handleSignOut() {
     await logout();
@@ -45,6 +76,8 @@ export function AppShell() {
         </div>
 
         <div className="flex items-center gap-3">
+          <Button variant="secondary" className="shrink-0 px-3 py-2" onClick={openCommandCenter} aria-label="Open Command Center">⌕ <span className="hidden sm:inline">Search / Commands</span><span className="ml-2 hidden text-xs text-[var(--lifeos-muted)] sm:inline">Ctrl K</span></Button>
+          <NotificationsButton />
           <p className="truncate text-sm text-[var(--lifeos-muted)]">
             {user?.email}
           </p>
@@ -87,6 +120,7 @@ export function AppShell() {
           <Outlet />
         </main>
       </div>
+      {commandOpen ? <CommandCenter onClose={() => setCommandOpen(false)} /> : null}
     </div>
   );
 }

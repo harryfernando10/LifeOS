@@ -23,6 +23,7 @@ import { PurchasesPanel } from "../components/PurchasesPanel";
 import { Button } from "../components/ui/Button";
 import { Input } from "../components/ui/Input";
 import { PageHeader } from "../components/ui/PageHeader";
+import { useSearchParams } from "react-router-dom";
 
 type CommitmentTab = "subscriptions" | "payments" | "purchases";
 
@@ -84,6 +85,8 @@ function optionalOrNull(value: string): string | null {
 }
 
 export function CommitmentsPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [openPurchaseFormRequest, setOpenPurchaseFormRequest] = useState(false);
   const [tab, setTab] = useState<CommitmentTab>("subscriptions");
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
   const [payments, setPayments] = useState<RecurringPayment[]>([]);
@@ -132,6 +135,18 @@ export function CommitmentsPage() {
   useEffect(() => {
     void loadAll();
   }, [loadAll]);
+
+  useEffect(() => {
+    const action = searchParams.get("action");
+    const requestedTab = searchParams.get("tab");
+    if (requestedTab === "subscriptions" || requestedTab === "payments" || requestedTab === "purchases") setTab(requestedTab);
+    if (action === "subscription" || action === "payment" || action === "purchase") {
+      setTab(action === "payment" ? "payments" : action === "purchase" ? "purchases" : "subscriptions");
+      if (action === "purchase") setOpenPurchaseFormRequest(true);
+      else setShowForm(true);
+    }
+    if (action || requestedTab) setSearchParams({}, { replace: true });
+  }, [searchParams, setSearchParams]);
 
   function resetForms() {
     setSubscriptionForm(emptySubscriptionForm);
@@ -408,7 +423,7 @@ export function CommitmentsPage() {
         </Button>
       </div>
 
-      {tab === "purchases" ? <PurchasesPanel /> : null}
+      {tab === "purchases" ? <PurchasesPanel openCreateRequested={openPurchaseFormRequest} onCreateRequestHandled={() => setOpenPurchaseFormRequest(false)} /> : null}
 
       {tab !== "purchases" && showForm ? (
         tab === "subscriptions" ? (

@@ -2,17 +2,17 @@
 
 **Purpose:** Living implementation state for agents and developers. Read this before writing code.
 
-**Last updated:** 2026-10-03 (Phase 14 complete)
+**Last updated:** 2026-10-03 (Phase 15 complete)
 
 ---
 
 ## Current Phase
 
-Phase 14 — AI Intelligence (complete)
+Phase 15 — Command Center + Notifications (complete)
 
 ## Status
 
-Phase 14 is complete. The isolated FastAPI OCR/suggestion service, authenticated backend mediation, typed suggestion contract, Inbox review UI, and confirmed document/Purchase/Warranty workflows are implemented. Real Tesseract OCR 5.5.3 was verified using a process-local `TESSERACT_CMD` for a synthetic image and scanned PDF; text-based PDFs use direct extraction. The AI provider remains optional and unconfigured by default. No Phase 14 database migration was needed. Current branch: `master`; latest commit is the focused Phase 14 completion commit (`HEAD`); nothing was pushed.
+Phase 15 is complete locally. Phase 14's optional AI/OCR workflows remain intact. Current branch: `master`; latest commit subject: `feat: complete phase 15 - command center and notifications`; nothing was pushed to GitHub.
 
 ## Completed
 
@@ -89,9 +89,23 @@ Phase 14 is complete. The isolated FastAPI OCR/suggestion service, authenticated
   - Extracted text and suggestions are transient; no Prisma schema change or migration
   - Unit/integration coverage passes with mocked provider/OCR; real Tesseract 5.5.3 verified against synthetic image, scanned PDF, and text PDF
 
-## Next Task
+## Phase 15 implementation details
 
-Phase 15 — Command Center + Notifications
+- **Command Center architecture:** `frontend/src/components/layout/CommandCenter.tsx` is mounted by the authenticated `AppShell`. The shell owns Ctrl+K/Cmd+K handling, ignores input/textarea/select/contenteditable focus, and restores prior focus on close. Commands navigate via React Router and pass add actions to existing Vault, Commitments, and Renewals forms. Search results use the existing authenticated Search API; no parallel search service was added.
+- **Commands:** Home/Action Center, Vault/Add document, Commitments/Add subscription/Add recurring payment/Purchases, Financial Commitments/upcoming payments, Renewals/Deadlines, Timeline, Inbox/Add item/AI review, Search, overdue items, upcoming deadlines/renewals, and expiring-document attention navigation. AI processing remains in its existing Inbox review workflow; no new AI endpoint was added.
+- **Notification architecture:** `backend/src/services/notificationService.ts` calls `getActionCenterForUser`, so source selection and timing remain in Action Center (overdue plus inclusive next 30 UTC days). It reuses the existing `Notification` table and deduplicates by owner + source type + source id + due date. Stale derived reminders are removed when their Action Center item disappears.
+- **Notification sources:** deadlines, renewals, document expiry, active subscriptions, active recurring payments, and warranty expiry. Navigation uses fixed existing routes only; no storage paths or invented detail routes are exposed.
+- **API endpoints:** `GET /api/notifications` (items and unread count, refreshing derived records); `PATCH /api/notifications/:id/read`; `PATCH /api/notifications/read-all`. All routes require a session and scope rows to `req.authUser.id`.
+- **Frontend:** `CommandCenter`, `NotificationsButton`, and `api/notifications.ts` are mounted in the existing authenticated app shell. Existing `/app/*` routes are reused; query params open existing Vault, Commitment, Renewal, and Deadline forms. Search accepts an initial `q` query.
+- **Database/migration:** reused the existing `Notification` model. Added nullable `source_due_on` date, nullable `dismissed_at` timestamp, and a unique composite source/date index. Migration `20261003090000_phase15_notifications` is applied locally. No notification scheduler, email delivery, or duplicate attention model was added.
+- **Tests/results:** full backend suite: 76 passed, 0 failed. Prisma validate/generate, backend typecheck/build, frontend typecheck/build, and `git diff --check` pass. No frontend test runner exists in this repository.
+- **Security:** authenticated routes; user id comes only from the session; owner-scoped list and mutations; internal hrefs come from fixed mappings; source items use Action Center's owner-scoped queries; no private storage paths are returned. Mutations still use existing domain APIs and validation.
+- **Known limitations:** notifications refresh when the user opens the bell or app shell, not through a background scheduler. Only in-app reminders exist. Commands are deterministic. The user selects an Inbox item before invoking the existing AI review.
+- **Git:** branch `master`; completion commit subject `feat: complete phase 15 - command center and notifications`; local only, not pushed.
+
+## Next Phase
+
+Phase 16 — Production Hardening + Release
 
 ---
 

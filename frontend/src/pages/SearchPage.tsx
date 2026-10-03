@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { ApiRequestError } from "../api/client";
 import { searchLife, type SearchResult } from "../api/searchInbox";
 import { Input } from "../components/ui/Input";
@@ -7,7 +7,9 @@ import { PageHeader } from "../components/ui/PageHeader";
 
 const labels: Record<string, string> = { document: "Document", document_version: "Document version", subscription: "Subscription", recurring_payment: "Recurring payment", purchase: "Purchase", warranty: "Warranty", deadline: "Deadline", renewal: "Renewal", inbox_item: "Inbox" };
 export function SearchPage() {
-  const [query, setQuery] = useState(""); const [results, setResults] = useState<SearchResult[]>([]); const [loading, setLoading] = useState(false); const [error, setError] = useState(""); const [searched, setSearched] = useState(false);
+  const [searchParams] = useSearchParams();
+  const [query, setQuery] = useState(searchParams.get("q") ?? ""); const [results, setResults] = useState<SearchResult[]>([]); const [loading, setLoading] = useState(false); const [error, setError] = useState(""); const [searched, setSearched] = useState(false);
+  useEffect(() => { setQuery(searchParams.get("q") ?? ""); }, [searchParams]);
   useEffect(() => { const q = query.trim(); if (q.length < 2) { setResults([]); setError(""); setSearched(false); return; } let active = true; const timer = setTimeout(() => { setLoading(true); setError(""); void searchLife(q).then(r => { if (active) { setResults(r); setSearched(true); } }).catch(e => { if (active) setError(e instanceof ApiRequestError ? e.message : "Unable to search LifeOS."); }).finally(() => { if (active) setLoading(false); }); }, 250); return () => { active = false; clearTimeout(timer); }; }, [query]);
   const groups = results.reduce<Record<string, SearchResult[]>>((acc, item) => { (acc[item.type] ??= []).push(item); return acc; }, {});
   return <section className="space-y-6"><PageHeader title="Search" description="Find documents and life-admin records across LifeOS."/><Input label="Search LifeOS" placeholder="Try a provider, note, document title…" value={query} onChange={e => setQuery(e.target.value)} autoFocus hint="Enter at least 2 characters. Results include your Vault, commitments, renewals, deadlines, purchases, warranties, and Inbox."/>{loading ? <p className="text-sm text-[var(--lifeos-muted)]">Searching…</p> : null}{error ? <p role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p> : null}{searched && !loading && !error && !results.length ? <p className="text-sm text-[var(--lifeos-muted)]">No results found for “{query.trim()}”.</p> : null}{Object.entries(groups).map(([type, items]) => <section key={type} className="space-y-2"><h2 className="text-sm font-semibold text-[var(--lifeos-ink-soft)]">{labels[type] ?? type} <span className="font-normal text-[var(--lifeos-muted)]">({items.length})</span></h2><ul className="space-y-2">{items.map(item => <li key={`${type}:${item.id}`}><Link to={item.href} className="block rounded-xl border border-[var(--lifeos-border)] bg-white/70 px-4 py-3 hover:bg-white"><span className="font-medium text-[var(--lifeos-ink)]">{item.title}</span>{item.detail ? <span className="mt-1 block text-sm text-[var(--lifeos-muted)]">{item.detail}</span> : null}</Link></li>)}</ul></section>)}</section>;
