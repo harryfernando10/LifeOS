@@ -1,14 +1,92 @@
 # LifeOS
 
-Unified personal life-administration system.
+A unified personal life-administration system.
 
 > Calendar tells you when. LifeOS tells you what, why, where, and what to do next.
 
-Planning documents: `SRS.md`, `SDD.md`, `DEVELOPMENT_PLAN.md`, `Context.md`.
+Personal admin work is usually scattered across folders, email, calendars, portals, and notes. LifeOS brings documents, commitments, purchases, warranties, renewals, and deadlines into one private system so you can see what needs attention and what to do next.
 
-## Current status
+LifeOS is under active development and is built incrementally in phases. Phases 0–11 are complete. Additional functionality is planned.
 
-Phase 5 — Vault / Documents complete. Authenticated users can manage private documents in the Vault. Authentication (Phase 3) and the core data model (Phase 4) remain intact.
+---
+
+## Implemented features
+
+- **Authentication & authorization** — Register, login, and logout with HTTP-only session cookies, password hashing, protected routes, and ownership-scoped access.
+- **Private document Vault** — Upload, list, view, update metadata, download, and delete personal documents stored in private local file storage (not publicly served).
+- **Document versioning** — Replace documents with new versions, view version history, and download a specific version while preserving prior files.
+- **Commitments** — Manage subscriptions and recurring payments, including stored action URLs opened externally.
+- **Purchases & warranties** — Track purchases with optional receipt links to Vault documents and one warranty record per purchase.
+- **Renewals & deadlines** — Track renewals and deadlines with optional linked documents and external action URLs.
+- **Action Center** — Derived home view of overdue and upcoming items aggregated from existing owned records (no separate action-item store).
+- **Timeline** — Derived chronological view of life-admin events across documents, commitments, purchases, warranties, renewals, and deadlines.
+
+### Planned (not implemented yet)
+
+Later phases may add financial commitment summaries, AI assistance, OCR, notifications, search, Life Inbox, keyboard command palette (Ctrl+K), and related capabilities. These are **not** part of the current system.
+
+---
+
+## Current progress
+
+LifeOS is developed one phase at a time.
+
+| Phase | Name | Status |
+| --- | --- | --- |
+| Phase 0 | Project Initialization | Complete |
+| Phase 1 | Design System + Application Shell | Complete |
+| Phase 2 | Database Foundation | Complete |
+| Phase 3 | Authentication & Authorization | Complete |
+| Phase 4 | Core LifeOS Data Model | Complete |
+| Phase 5 | Vault / Documents | Complete |
+| Phase 6 | Document Versioning | Complete |
+| Phase 7 | Commitments | Complete |
+| Phase 8 | Purchases & Warranties | Complete |
+| Phase 9 | Renewals & Deadlines | Complete |
+| Phase 10 | Action Center | Complete |
+| Phase 11 | Timeline | Complete |
+| Phase 12 | Financial Commitments | Planned |
+
+Phase 12 has **not** started.
+
+---
+
+## Architecture
+
+```
+React + TypeScript + Vite + Tailwind frontend
+        ↓
+Node.js + Express + TypeScript backend
+        ↓
+PostgreSQL + Prisma
+        ↓
+Private local file storage
+```
+
+The backend is the only component that talks to PostgreSQL and private file storage. An AI service is planned for later phases and is **not** part of the implemented core system today.
+
+---
+
+## Tech stack
+
+**In use**
+
+- React
+- TypeScript
+- Vite
+- Tailwind CSS
+- React Router
+- Node.js
+- Express
+- PostgreSQL
+- Prisma
+- Git / GitHub
+
+**Planned later**
+
+- Python / FastAPI AI service (optional; after core application work)
+
+---
 
 ## Prerequisites
 
@@ -16,76 +94,193 @@ Phase 5 — Vault / Documents complete. Authenticated users can manage private d
 - npm
 - PostgreSQL (local)
 
+---
+
 ## Setup
+
+### 1. Clone the repository
+
+```bash
+git clone <repository-url>
+cd LifeOS
+```
+
+### 2. Create environment files
+
+**Windows PowerShell**
+
+```powershell
+Copy-Item .env.example frontend\.env
+Copy-Item backend\.env.example backend\.env
+```
+
+**macOS / Linux**
 
 ```bash
 cp .env.example frontend/.env
 cp backend/.env.example backend/.env
 ```
 
-Edit `backend/.env`: set `DATABASE_URL` and a unique `SESSION_SECRET` (min 32 characters).
+Root `.env.example` documents shared variables. Runtime config lives in:
 
-```bash
-cd frontend && npm install
-cd ../backend && npm install
-npx prisma migrate deploy
-```
+- `frontend/.env` — frontend Vite settings (see `frontend/.env.example`)
+- `backend/.env` — backend settings (see `backend/.env.example`)
 
-On Windows PowerShell, copy env files with `Copy-Item` instead of `cp`.
+### 3. Configure backend secrets
 
-## Run
+Edit `backend/.env` and set:
 
-Terminal 1 — backend:
+- `DATABASE_URL` — PostgreSQL connection string for your local database
+- `SESSION_SECRET` — a unique secret, at least 32 characters
+
+Do not commit real credentials. Placeholder values in example files are not production secrets.
+
+Optional backend overrides (documented in `backend/.env.example`) include vault storage path and max upload size.
+
+### 4. Install dependencies and apply migrations
 
 ```bash
 cd backend
-npm run dev
+npm install
+npx prisma migrate deploy
 ```
-
-Backend: http://localhost:3001
-Health: http://localhost:3001/api/health
-Ready: http://localhost:3001/api/ready
-
-Terminal 2 — frontend:
 
 ```bash
 cd frontend
+npm install
+```
+
+Do **not** reset the database as part of normal setup.
+
+---
+
+## Running the application
+
+Use two terminals.
+
+**Backend**
+
+```bash
+cd backend
+npm install
 npm run dev
 ```
 
-Frontend: http://localhost:5173  
-The Vite dev server proxies `/api` to the backend (cookies included).
+- Backend: http://localhost:3001
+- Health: http://localhost:3001/api/health
+- Ready: http://localhost:3001/api/ready
 
-Open `/register` to create an account, then use `/app/vault` to upload sample documents. Sign out clears the server session.
-
-## Checks
+**Frontend**
 
 ```bash
-cd backend && npx prisma validate && npm run typecheck && npm run build && npm test
-cd ../frontend && npm run typecheck && npm run build
+cd frontend
+npm install
+npm run dev
 ```
 
-## Auth API (Phase 3)
+- Frontend: http://localhost:5173
 
-- `POST /api/auth/register`
-- `POST /api/auth/login`
-- `POST /api/auth/logout`
-- `GET /api/auth/me` (authenticated)
+The Vite dev server proxies `/api` to the backend (cookies included).
 
-## Documents API (Phase 5)
+Open `/register` to create an account, then use the authenticated `/app/*` routes (for example `/app/vault`, `/app/commitments`, `/app/renewals`, `/app/timeline`, `/app/home`).
 
-- `GET /api/documents`
-- `GET /api/documents/:id`
-- `POST /api/documents` (multipart: `file` + metadata)
-- `PATCH /api/documents/:id`
-- `DELETE /api/documents/:id`
-- `GET /api/documents/:id/download`
+---
 
-Allowed upload types: PDF, JPEG, PNG, WEBP. Default max size: 10 MiB (`MAX_UPLOAD_BYTES`).
+## Database
 
-## Notes
+From `backend/`:
 
-- Do not commit `.env` files.
-- Do not store real personal documents in `private-storage/`.
-- Vault files are never publicly served; access is ownership-checked through the API.
-- Do not add Phase 6+ features until that phase is the current task.
+```bash
+npx prisma migrate deploy
+```
+
+Useful Prisma scripts from `backend/package.json`:
+
+```bash
+npm run prisma:validate
+npm run prisma:generate
+npm run prisma:migrate
+npm run prisma:deploy
+```
+
+Use `migrate deploy` for applying existing migrations. Do not reset the database unless you intentionally choose to wipe local data outside this guide.
+
+---
+
+## Verification
+
+Run these checks from the repository after installing dependencies.
+
+**Prisma validation**
+
+```bash
+cd backend
+npx prisma validate
+```
+
+**Backend typecheck**
+
+```bash
+cd backend
+npm run typecheck
+```
+
+**Backend build**
+
+```bash
+cd backend
+npm run build
+```
+
+**Backend tests**
+
+```bash
+cd backend
+npm test
+```
+
+**Frontend typecheck**
+
+```bash
+cd frontend
+npm run typecheck
+```
+
+**Frontend build**
+
+```bash
+cd frontend
+npm run build
+```
+
+---
+
+## Security and privacy
+
+- Never commit `.env` files.
+- Never commit real personal documents.
+- `private-storage/` is intentionally excluded from Git except `.gitkeep`.
+- Vault files are not publicly served; access goes through authenticated API routes.
+- Document access is ownership-checked.
+- Use sample or test documents during development.
+
+---
+
+## Documentation
+
+| Document | Purpose |
+| --- | --- |
+| `SRS.md` | Product requirements and product philosophy |
+| `SDD.md` | System architecture and design direction |
+| `DEVELOPMENT_PLAN.md` | Phased implementation roadmap |
+| `Context.md` | Living implementation state for current work |
+
+---
+
+## Project status
+
+**Implemented:** Phases 0–11 (foundation through Timeline).
+
+**Planned:** Phase 12 (Financial Commitments) and later phases described in `DEVELOPMENT_PLAN.md`.
+
+LifeOS is actively developed. The core life-admin loop for documents, commitments, purchases/warranties, renewals/deadlines, Action Center, and Timeline is in place; many product areas remain ahead.
