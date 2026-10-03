@@ -2,17 +2,17 @@
 
 **Purpose:** Living implementation state for agents and developers. Read this before writing code.
 
-**Last updated:** 2026-10-03 (Phase 9 complete)
+**Last updated:** 2026-10-03 (Phase 10 complete)
 
 ---
 
 ## Current Phase
 
-Phase 9 — Renewals & Deadlines (complete)
+Phase 10 — Action Center (complete)
 
 ## Status
 
-Phase 9 complete. Authenticated users can CRUD renewals (lifecycle kinds) and deadlines with due dates, statuses, action URLs, and optional Vault document links. Ownership isolation enforced. No schema migration required (Phase 4 Renewal/Deadline reused). Phases 3–8 remain intact.
+Phase 10 complete. Home Action Center aggregates overdue and upcoming attention items for the authenticated user from existing domain records (derived, not persisted). Ownership isolation enforced. No schema migration required. Phases 3–9 remain intact.
 
 ## Completed
 
@@ -59,12 +59,17 @@ Phase 9 complete. Authenticated users can CRUD renewals (lifecycle kinds) and de
   - Action URLs stored and opened externally
   - `/app/renewals` UI with Renewals + Deadlines tabs
   - Focused renewal/deadline ownership/validation tests
+- Phase 10 — Action Center
+  - Derived aggregation service over owned domain records (no ActionItem table)
+  - `GET /api/action-center` with overdue vs upcoming (30-day window)
+  - Home `/app/home` consumes Action Center: loading/empty/error/list
+  - Focused ownership, overdue/upcoming, multi-source, empty-state tests
 
 ## Next Task
 
-Phase 10 — Action Center
+Phase 11 — Timeline
 
-Do not start Phase 10 until explicitly instructed (unless continuing an assigned multi-phase batch).
+Do not start Phase 11 until explicitly instructed (unless continuing an assigned multi-phase batch).
 
 ---
 
@@ -320,11 +325,47 @@ Logout deletes the server session and clears the cookie.
 
 ---
 
+## Phase 10 Action Center decisions
+
+| Decision | Choice |
+| --- | --- |
+| Persistence | **Derived** aggregation — no `ActionItem` table (SDD: Action Center is a derived view) |
+| Endpoint | `GET /api/action-center` (auth required) |
+| Urgency | `overdue` (date before today UTC) vs `upcoming` (today through window end) |
+| Window | **30 days** upcoming horizon (specs leave windows unfinalized; smallest practical choice) |
+| Sources | OPEN deadlines; UPCOMING/DUE renewals; ACTIVE/EXPIRED documents with `expiresOn`; ACTIVE subscriptions with `nextBillingOn`; ACTIVE recurring payments with `nextDueOn`; warranties by `endsOn` |
+| Exclusions | COMPLETED/CANCELLED deadlines/renewals; PAUSED/CANCELLED commitments; ARCHIVED documents; records beyond the 30-day window; null due dates |
+| Sort | Overdue first, then due date ascending, then title |
+| Navigation | `href` to existing shell routes (`/app/renewals`, `/app/vault`, `/app/commitments`); optional external `actionUrl` |
+| Authorization | Every underlying query filters by `req.authUser.id` |
+| Deferred | Timeline (Phase 11), notifications/reminders, importance scoring, financial 7/30/365 overview (Phase 12), caching |
+
+### Action Center API
+
+| Method | Path | Auth | Notes |
+| --- | --- | --- | --- |
+| GET | `/api/action-center` | Yes | Unified attention list for current user |
+
+### Frontend
+
+- `/app/home` loads Action Center (loading / empty / error / calm list)
+- Shows urgency, source type, title, detail, due date, Open link, optional external action URL
+
+### Intentionally deferred
+
+- Timeline chronological aggregation (Phase 11)
+- Financial 7/30/365 commitment overview (Phase 12)
+- Notifications / push / email (Phase 15+)
+- Search / Ctrl+K (Phase 13)
+- Configurable attention windows / importance scores
+
+---
+
 ## Important files
 
-### Backend (Phase 3–9)
+### Backend (Phase 3–10)
 
-- `backend/prisma/schema.prisma` — auth + full core domain model (unchanged in Phases 5–9)
+- `backend/prisma/schema.prisma` — auth + full core domain model (unchanged in Phases 5–10)
 - `backend/prisma/migrations/20261002083250_init/` — Phase 2
 - `backend/prisma/migrations/20261002090909_auth_sessions/` — Phase 3
 - `backend/prisma/migrations/20261002092710_core_domain_model/` — Phase 4
@@ -333,10 +374,12 @@ Logout deletes the server session and clears the cookie.
 - `backend/src/services/subscriptionService.ts` / `recurringPaymentService.ts`
 - `backend/src/services/purchaseService.ts` — purchases + warranties
 - `backend/src/services/renewalService.ts` / `deadlineService.ts`
+- `backend/src/services/actionCenterService.ts` — derived Action Center aggregation
 - `backend/src/controllers/documentController.ts` / `routes/documentRoutes.ts`
 - `backend/src/controllers/subscriptionController.ts` / `recurringPaymentController.ts`
 - `backend/src/controllers/purchaseController.ts` / `routes/purchaseRoutes.ts`
 - `backend/src/controllers/renewalController.ts` / `deadlineController.ts`
+- `backend/src/controllers/actionCenterController.ts` / `routes/actionCenterRoutes.ts`
 - `backend/src/routes/renewalDeadlineRoutes.ts`
 - `backend/src/routes/commitmentRoutes.ts`
 - `backend/src/validators/commitmentValidators.ts`
@@ -347,6 +390,7 @@ Logout deletes the server session and clears the cookie.
 - `backend/src/commitments/commitments.test.ts` — Phase 7 tests
 - `backend/src/purchases/purchases.test.ts` — Phase 8 tests
 - `backend/src/renewals/renewalsDeadlines.test.ts` — Phase 9 tests
+- `backend/src/actionCenter/actionCenter.test.ts` — Phase 10 tests
 - Auth stack unchanged: `authService`, `requireAuth`, `assertOwnership`, auth routes
 
 ### Frontend
@@ -356,9 +400,11 @@ Logout deletes the server session and clears the cookie.
 - `frontend/src/api/commitments.ts` — subscription + recurring payment client
 - `frontend/src/api/purchases.ts` — purchase + warranty client
 - `frontend/src/api/renewalsDeadlines.ts` — renewal + deadline client
+- `frontend/src/api/actionCenter.ts` — Action Center client
 - `frontend/src/pages/CommitmentsPage.tsx` — Commitments UI (incl. Purchases tab)
 - `frontend/src/components/PurchasesPanel.tsx` — Purchases/warranties UI
 - `frontend/src/pages/RenewalsPage.tsx` — Renewals & Deadlines UI
+- `frontend/src/pages/HomePage.tsx` — Action Center Home UI
 - `frontend/src/api/client.ts` — FormData-aware requests
 
 ## API endpoints
@@ -392,13 +438,14 @@ Logout deletes the server session and clears the cookie.
 | GET/PATCH/DELETE | `/api/renewals/:id` | Yes | Renewal read/update/delete |
 | GET/POST | `/api/deadlines` | Yes | Deadline list/create |
 | GET/PATCH/DELETE | `/api/deadlines/:id` | Yes | Deadline read/update/delete |
+| GET | `/api/action-center` | Yes | Derived attention list |
 
 ## Tests / checks performed
 
-- `npx prisma validate` — pass (no Phase 9 migration)
+- `npx prisma validate` — pass (no Phase 10 migration)
 - `npx prisma migrate status` — Database schema is up to date (3 migrations)
 - Backend `npm run typecheck` / `npm run build` — pass
-- Backend `npm test` — 48 pass (Phases 3–9; 6 Phase 9 renewal/deadline tests)
+- Backend `npm test` — 52 pass (Phases 3–10; 4 Phase 10 Action Center tests)
 - Frontend `npm run typecheck` / `npm run build` — pass
 - `git diff --check` — pass
 
@@ -413,7 +460,8 @@ Logout deletes the server session and clears the cookie.
 - Phase 6: `feat: complete phase 6 - document versioning`
 - Phase 7: `feat: complete phase 7 - commitments`
 - Phase 8: `feat: complete phase 8 - purchases and warranties`
-- Phase 9 commit expected: `feat: complete phase 9 - renewals and deadlines`
+- Phase 9: `feat: complete phase 9 - renewals and deadlines`
+- Phase 10 commit expected: `feat: complete phase 10 - action center`
 - No remote configured; do not push unless explicitly requested
 
 ## Known issues / blockers
@@ -432,11 +480,12 @@ Logout deletes the server session and clears the cookie.
 - Commitments are Subscription + RecurringPayment only — not an accounting system (Phase 7)
 - Purchases reuse Phase 4 Purchase/Warranty; receipt links to existing Vault documents only — no OCR (Phase 8)
 - Renewals/Deadlines reuse Phase 4 models; kinds are enum data, not product modules; no fake payment/renewal (Phase 9)
+- Action Center is a derived query service over owned records — not a stored ActionItem entity; 30-day upcoming window (Phase 10)
 - Inbox route remains a shell only until Phase 14
 
 ## Exact next phase
 
-**Phase 10 — Action Center**
+**Phase 11 — Timeline**
 
 ---
 
@@ -487,3 +536,4 @@ AI is a suggestion layer. Core app must work if AI is unavailable. AI must not a
 | 2026-10-02 | Phase 7 complete: subscriptions + recurring payments CRUD, action URLs, Commitments UI. Next: Phase 8 — Purchases & Warranties. |
 | 2026-10-03 | Phase 8 complete: purchases + warranties CRUD, optional Vault receipt link, Commitments Purchases tab. Next: Phase 9 — Renewals & Deadlines. |
 | 2026-10-03 | Phase 9 complete: renewals + deadlines CRUD, optional Vault document links, `/app/renewals` UI. Next: Phase 10 — Action Center. |
+| 2026-10-03 | Phase 10 complete: derived Action Center on Home aggregating overdue/upcoming items. Next: Phase 11 — Timeline. |

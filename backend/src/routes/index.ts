@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { actionCenterRouter } from "./actionCenterRoutes.js";
 import { authRouter } from "./authRoutes.js";
 import { commitmentRouter } from "./commitmentRoutes.js";
 import { documentRouter } from "./documentRoutes.js";
@@ -14,3 +15,4 @@ apiRouter.use(documentRouter);
 apiRouter.use(commitmentRouter);
 apiRouter.use(purchaseRouter);
 apiRouter.use(renewalDeadlineRouter);
+apiRouter.use(actionCenterRouter);
