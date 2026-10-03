@@ -2,17 +2,17 @@
 
 **Purpose:** Living implementation state for agents and developers. Read this before writing code.
 
-**Last updated:** 2026-10-03 (Phase 11 complete)
+**Last updated:** 2026-10-03 (Phase 12 complete)
 
 ---
 
 ## Current Phase
 
-Phase 11 — Timeline (complete)
+Phase 12 — Financial Commitments (complete)
 
 ## Status
 
-Phase 11 complete. Timeline aggregates a chronological view of life-admin events for the authenticated user from existing domain records (derived, not persisted). Default window: past 365 + next 365 days. Ownership isolation enforced. No schema migration required. Phases 3–10 remain intact.
+Phase 12 complete. Financial commitments overview is a derived aggregation of expected recurring amounts from ACTIVE subscriptions and ACTIVE recurring payments for the authenticated user. Windows: next 7 / 30 / 365 days (inclusive UTC day range from today through today+N). Ownership isolation enforced. No schema migration required. Phases 3–11 remain intact.
 
 ## Completed
 
@@ -69,12 +69,18 @@ Phase 11 complete. Timeline aggregates a chronological view of life-admin events
   - `GET /api/timeline` for authenticated user
   - `/app/timeline` UI: loading/empty/error/chronological list
   - Focused ownership, sort, multi-source, null-date, empty-state tests
+- Phase 12 — Financial Commitments
+  - Derived financial overview (no finance/ledger table)
+  - `GET /api/financial-commitments` with 7/30/365 windows
+  - Recurrence expansion for known billing intervals; CUSTOM = single stored next date
+  - `/app/financial` UI: window tabs, per-currency totals, occurrence list
+  - Focused auth, ownership, windows, boundaries, currencies, double-count tests
 
 ## Next Task
 
-Phase 12 — Financial Commitments
+Phase 13 — Search
 
-Do not start Phase 12 until explicitly instructed (unless continuing an assigned multi-phase batch).
+Do not start Phase 13 until explicitly instructed (unless continuing an assigned multi-phase batch).
 
 ---
 
@@ -398,19 +404,56 @@ Logout deletes the server session and clears the cookie.
 
 ### Intentionally deferred
 
-- Financial 7/30/365 commitment overview (Phase 12)
 - Configurable Timeline ranges / type filters
-- Recurrence occurrence expansion
+- Recurrence occurrence expansion on Timeline (financial expansion lives in Phase 12)
 - Purchase dates / document upload events (not in FR-TL-01)
 - Notifications / Search / Ctrl+K
 
 ---
 
+## Phase 12 Financial Commitments decisions
+
+| Decision | Choice |
+| --- | --- |
+| Persistence | **Derived** aggregation — no finance/ledger/budget table (SDD + FR-FIN-02) |
+| Endpoint | `GET /api/financial-commitments` (auth required) |
+| Windows (FR-FIN-01) | Next **7 / 30 / 365** days; inclusive UTC range `[today, today+N]` (same day-boundary style as Action Center’s 30-day window) |
+| Sources | **ACTIVE** `Subscription` (`nextBillingOn`) + **ACTIVE** `RecurringPayment` (`nextDueOn`) only |
+| Exclusions | PAUSED/CANCELLED commitments; null next due/billing date; purchases; warranties; one-time amounts |
+| Recurrence | Known intervals (WEEKLY/MONTHLY/QUARTERLY/YEARLY) expand from stored next date through window end; overdue next dates advance forward into the window. **CUSTOM**: at most the single stored next date (no invented schedule) |
+| Double-counting | One occurrence id per `{sourceType}:{sourceId}:{YYYY-MM-DD}`; subscriptions and recurring payments are separate sources never merged |
+| Amount / currency | Amounts as `Decimal` strings (`toFixed(2)`); totals grouped **by currency** with **no FX conversion**; null amounts listed but excluded from numeric totals |
+| Date handling | UTC start-of-day; `@db.Date` as `YYYY-MM-DD`; range end inclusive |
+| Authorization | Every query filters by `req.authUser.id` |
+| UI | Dedicated `/app/financial` route + AppShell nav (minimal overview; not budgeting) |
+| Deferred | Budgets, investments, banking, FX conversion, Home embed of financial summary, editing amounts from this page |
+
+### Financial API
+
+| Method | Path | Auth | Notes |
+| --- | --- | --- | --- |
+| GET | `/api/financial-commitments` | Yes | Three windows with totals + occurrence lists |
+
+### Frontend
+
+- `/app/financial` loads Financial commitments (loading / empty / error / window tabs + list)
+- Nav item "Financial" in AppShell
+- Shows per-currency totals, occurrence amount/due date, Open → Commitments, optional external action URL
+
+### Intentionally deferred
+
+- Budgets / investment / banking (explicitly out of scope — FR-FIN-02)
+- Exchange-rate conversion
+- Embedding financial summary on Home
+- Search (Phase 13) / Inbox (Phase 14) / notifications
+
+---
+
 ## Important files
 
-### Backend (Phase 3–11)
+### Backend (Phase 3–12)
 
-- `backend/prisma/schema.prisma` — auth + full core domain model (unchanged in Phases 5–11)
+- `backend/prisma/schema.prisma` — auth + full core domain model (unchanged in Phases 5–12)
 - `backend/prisma/migrations/20261002083250_init/` — Phase 2
 - `backend/prisma/migrations/20261002090909_auth_sessions/` — Phase 3
 - `backend/prisma/migrations/20261002092710_core_domain_model/` — Phase 4
@@ -421,12 +464,14 @@ Logout deletes the server session and clears the cookie.
 - `backend/src/services/renewalService.ts` / `deadlineService.ts`
 - `backend/src/services/actionCenterService.ts` — derived Action Center aggregation
 - `backend/src/services/timelineService.ts` — derived Timeline aggregation
+- `backend/src/services/financialCommitmentService.ts` — derived financial windows
 - `backend/src/controllers/documentController.ts` / `routes/documentRoutes.ts`
 - `backend/src/controllers/subscriptionController.ts` / `recurringPaymentController.ts`
 - `backend/src/controllers/purchaseController.ts` / `routes/purchaseRoutes.ts`
 - `backend/src/controllers/renewalController.ts` / `deadlineController.ts`
 - `backend/src/controllers/actionCenterController.ts` / `routes/actionCenterRoutes.ts`
 - `backend/src/controllers/timelineController.ts` / `routes/timelineRoutes.ts`
+- `backend/src/controllers/financialCommitmentController.ts` / `routes/financialCommitmentRoutes.ts`
 - `backend/src/routes/renewalDeadlineRoutes.ts`
 - `backend/src/routes/commitmentRoutes.ts`
 - `backend/src/validators/commitmentValidators.ts`
@@ -439,6 +484,7 @@ Logout deletes the server session and clears the cookie.
 - `backend/src/renewals/renewalsDeadlines.test.ts` — Phase 9 tests
 - `backend/src/actionCenter/actionCenter.test.ts` — Phase 10 tests
 - `backend/src/timeline/timeline.test.ts` — Phase 11 tests
+- `backend/src/financial/financialCommitments.test.ts` — Phase 12 tests
 - Auth stack unchanged: `authService`, `requireAuth`, `assertOwnership`, auth routes
 
 ### Frontend
@@ -450,11 +496,13 @@ Logout deletes the server session and clears the cookie.
 - `frontend/src/api/renewalsDeadlines.ts` — renewal + deadline client
 - `frontend/src/api/actionCenter.ts` — Action Center client
 - `frontend/src/api/timeline.ts` — Timeline client
+- `frontend/src/api/financialCommitments.ts` — Financial commitments client
 - `frontend/src/pages/CommitmentsPage.tsx` — Commitments UI (incl. Purchases tab)
 - `frontend/src/components/PurchasesPanel.tsx` — Purchases/warranties UI
 - `frontend/src/pages/RenewalsPage.tsx` — Renewals & Deadlines UI
 - `frontend/src/pages/HomePage.tsx` — Action Center Home UI
 - `frontend/src/pages/TimelinePage.tsx` — Timeline UI
+- `frontend/src/pages/FinancialPage.tsx` — Financial commitments UI
 - `frontend/src/api/client.ts` — FormData-aware requests
 
 ## API endpoints
@@ -490,13 +538,14 @@ Logout deletes the server session and clears the cookie.
 | GET/PATCH/DELETE | `/api/deadlines/:id` | Yes | Deadline read/update/delete |
 | GET | `/api/action-center` | Yes | Derived attention list |
 | GET | `/api/timeline` | Yes | Derived chronological timeline |
+| GET | `/api/financial-commitments` | Yes | Derived 7/30/365 financial windows |
 
 ## Tests / checks performed
 
-- `npx prisma validate` — pass (no Phase 11 migration)
+- `npx prisma validate` — pass (no Phase 12 migration)
 - `npx prisma migrate status` — Database schema is up to date (3 migrations)
 - Backend `npm run typecheck` / `npm run build` — pass
-- Backend `npm test` — 56 pass (Phases 3–11; 4 Phase 11 Timeline tests)
+- Backend `npm test` — 64 pass (Phases 3–12; 8 Phase 12 Financial tests)
 - Frontend `npm run typecheck` / `npm run build` — pass
 - `git diff --check` — pass
 
@@ -513,8 +562,9 @@ Logout deletes the server session and clears the cookie.
 - Phase 8: `feat: complete phase 8 - purchases and warranties`
 - Phase 9: `feat: complete phase 9 - renewals and deadlines`
 - Phase 10: `feat: complete phase 10 - action center`
-- Phase 11 commit expected: `feat: complete phase 11 - timeline`
-- No remote configured; do not push unless explicitly requested
+- Phase 11: `feat: complete phase 11 - timeline`
+- Phase 12 commit expected: `feat: complete phase 12 - financial commitments`
+- Do not push unless explicitly requested
 
 ## Known issues / blockers
 
@@ -534,11 +584,12 @@ Logout deletes the server session and clears the cookie.
 - Renewals/Deadlines reuse Phase 4 models; kinds are enum data, not product modules; no fake payment/renewal (Phase 9)
 - Action Center is a derived query service over owned records — not a stored ActionItem entity; 30-day upcoming window (Phase 10)
 - Timeline is a derived chronological query over owned FR-TL-01 sources — not a stored TimelineEvent entity; ±365-day default window; no recurrence expansion (Phase 11)
+- Financial commitments overview is a derived 7/30/365 aggregation over ACTIVE subscriptions + recurring payments with interval expansion; not a budget/ledger; purchases excluded (Phase 12)
 - Inbox route remains a shell only until Phase 14
 
 ## Exact next phase
 
-**Phase 12 — Financial Commitments**
+**Phase 13 — Search**
 
 ---
 
@@ -568,7 +619,7 @@ LifeOS is a unified personal life-administration system.
 
 Stack: React + TypeScript + Vite + React Router + Tailwind (frontend); Node.js + Express + TypeScript (backend); PostgreSQL + Prisma; optional Python/FastAPI AI after core works; private local file storage first.
 
-Protected routes: `/app/home`, `/app/vault`, `/app/commitments`, `/app/renewals`, `/app/timeline`, `/app/inbox`.
+Protected routes: `/app/home`, `/app/vault`, `/app/commitments`, `/app/financial`, `/app/renewals`, `/app/timeline`, `/app/inbox`.
 
 AI is a suggestion layer. Core app must work if AI is unavailable. AI must not access the database.
 
@@ -590,3 +641,5 @@ AI is a suggestion layer. Core app must work if AI is unavailable. AI must not a
 | 2026-10-03 | Phase 8 complete: purchases + warranties CRUD, optional Vault receipt link, Commitments Purchases tab. Next: Phase 9 — Renewals & Deadlines. |
 | 2026-10-03 | Phase 9 complete: renewals + deadlines CRUD, optional Vault document links, `/app/renewals` UI. Next: Phase 10 — Action Center. |
 | 2026-10-03 | Phase 10 complete: derived Action Center on Home aggregating overdue/upcoming items. Next: Phase 11 — Timeline. |
+| 2026-10-03 | Phase 11 complete: derived Timeline chronological view (±365 days). Next: Phase 12 — Financial Commitments. |
+| 2026-10-03 | Phase 12 complete: derived financial 7/30/365 overview from ACTIVE subscriptions + recurring payments. Next: Phase 13 — Search. |

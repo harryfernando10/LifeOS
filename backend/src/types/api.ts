@@ -103,3 +103,44 @@ export type PurchaseResponseBody = {
   createdAt: string;
   updatedAt: string;
 };
+
+export type FinancialOccurrenceBody = {
+  id: string;
+  sourceType: "subscription" | "recurring_payment";
+  sourceId: string;
+  title: string;
+  detail: string | null;
+  amount: string | null;
+  currency: string;
+  dueOn: string;
+  billingInterval: string;
+  href: string;
+  actionUrl: string | null;
+};
+
+export type FinancialCurrencyTotalBody = {
+  currency: string;
+  total: string;
+  occurrenceCount: number;
+  countedOccurrenceCount: number;
+};
+
+export type FinancialWindowBody = {
+  days: number;
+  rangeStart: string;
+  rangeEnd: string;
+  totalsByCurrency: FinancialCurrencyTotalBody[];
+  items: FinancialOccurrenceBody[];
+};
+
+export type FinancialCommitmentsResponseBody = {
+  generatedAt: string;
+  windows: FinancialWindowBody[];
+  notes: {
+    sources: string;
+    currency: string;
+    nullAmounts: string;
+    customInterval: string;
+    exclusions: string;
+  };
+};

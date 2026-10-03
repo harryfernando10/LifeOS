@@ -2,6 +2,7 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import { ProtectedRoute } from "./auth/ProtectedRoute";
 import { AppShell } from "./components/layout/AppShell";
 import { CommitmentsPage } from "./pages/CommitmentsPage";
+import { FinancialPage } from "./pages/FinancialPage";
 import { HomePage } from "./pages/HomePage";
 import { InboxPage } from "./pages/InboxPage";
 import { LoginPage } from "./pages/LoginPage";
@@ -23,6 +24,7 @@ export default function App() {
           <Route path="home" element={<HomePage />} />
           <Route path="vault" element={<VaultPage />} />
           <Route path="commitments" element={<CommitmentsPage />} />
+          <Route path="financial" element={<FinancialPage />} />
           <Route path="renewals" element={<RenewalsPage />} />
           <Route path="timeline" element={<TimelinePage />} />
           <Route path="inbox" element={<InboxPage />} />
