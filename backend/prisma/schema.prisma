@@ -155,6 +155,7 @@ model Document {
   purchaseReceipts Purchase[]        @relation("PurchaseReceipt")
   linkedRenewals   Renewal[]         @relation("RenewalDocument")
   linkedDeadlines  Deadline[]        @relation("DeadlineDocument")
+  inboxItems       InboxItem[]       @relation("InboxDocument")
 
   @@index([userId])
   @@index([userId, category])
@@ -335,11 +336,14 @@ model InboxItem {
   sizeBytes        Int?            @map("size_bytes")
   status           InboxItemStatus @default(UNREVIEWED)
   notes            String?
+  linkedDocumentId String?         @map("linked_document_id")
+  linkedDocument   Document?       @relation("InboxDocument", fields: [linkedDocumentId], references: [id], onDelete: SetNull)
   createdAt        DateTime        @default(now()) @map("created_at")
   updatedAt        DateTime        @updatedAt @map("updated_at")
 
   @@index([userId])
   @@index([userId, status])
+  @@index([userId, linkedDocumentId])
   @@map("inbox_items")
 }
 

@@ -2,17 +2,17 @@
 
 **Purpose:** Living implementation state for agents and developers. Read this before writing code.
 
-**Last updated:** 2026-10-03 (Phase 12 complete)
+**Last updated:** 2026-10-03 (Phase 13 complete)
 
 ---
 
 ## Current Phase
 
-Phase 12 — Financial Commitments (complete)
+Phase 13 — Search + Life Inbox (complete)
 
 ## Status
 
-Phase 12 complete. Financial commitments overview is a derived aggregation of expected recurring amounts from ACTIVE subscriptions and ACTIVE recurring payments for the authenticated user. Windows: next 7 / 30 / 365 days (inclusive UTC day range from today through today+N). Ownership isolation enforced. No schema migration required. Phases 3–11 remain intact.
+Phase 13 complete. Authenticated deterministic search spans documents and versions, subscriptions, recurring payments, purchases, warranties, deadlines, renewals, and Inbox items; all queries are scoped to `req.authUser.id`. Life Inbox supports structured capture, private PDF/image uploads, authenticated download, list/filter, inspect, edit, manual status triage, deletion, and optional links to owned Vault documents. No AI/OCR/classification was added. One additive migration introduces `InboxItem.linkedDocumentId`. Full backend suite passes (67 tests); backend/frontend builds and type checks pass. Current branch: `master`; latest commit is the focused Phase 13 commit containing this handoff (HEAD); working tree is clean after commit.
 
 ## Completed
 
@@ -75,12 +75,16 @@ Phase 12 complete. Financial commitments overview is a derived aggregation of ex
   - Recurrence expansion for known billing intervals; CUSTOM = single stored next date
   - `/app/financial` UI: window tabs, per-currency totals, occurrence list
   - Focused auth, ownership, windows, boundaries, currencies, double-count tests
+- Phase 13 — Search + Life Inbox
+  - Authenticated deterministic search across owned documents/versions, subscriptions, recurring payments, purchases, warranties, deadlines, renewals, and inbox items
+  - `/app/search` grouped results and links to existing entity area routes
+  - Structured Inbox capture with private PDF/image uploads, list/detail/edit/filter/manual status triage/delete; optional owned Vault document association
+  - One migration adds InboxItem → Document optional association; no duplicate Inbox model
+  - No AI, OCR, extraction, or automated classification
 
 ## Next Task
 
-Phase 13 — Search
-
-Do not start Phase 13 until explicitly instructed (unless continuing an assigned multi-phase batch).
+Phase 14 — AI Intelligence
 
 ---
 
@@ -585,11 +589,12 @@ Logout deletes the server session and clears the cookie.
 - Action Center is a derived query service over owned records — not a stored ActionItem entity; 30-day upcoming window (Phase 10)
 - Timeline is a derived chronological query over owned FR-TL-01 sources — not a stored TimelineEvent entity; ±365-day default window; no recurrence expansion (Phase 11)
 - Financial commitments overview is a derived 7/30/365 aggregation over ACTIVE subscriptions + recurring payments with interval expansion; not a budget/ledger; purchases excluded (Phase 12)
-- Inbox route remains a shell only until Phase 14
+- Search returns deterministic grouped results from existing user-owned records; result links target existing feature routes because those features do not have entity-specific routes.
+- Life Inbox uses the existing InboxItem table and statuses; documents are associated through an optional owned Vault-document foreign key. Raw file upload into Inbox is not implemented; upload a document to Vault then associate it.
 
 ## Exact next phase
 
-**Phase 13 — Search**
+**Phase 14 — AI Intelligence**
 
 ---
 
@@ -621,6 +626,8 @@ Stack: React + TypeScript + Vite + React Router + Tailwind (frontend); Node.js +
 
 Protected routes: `/app/home`, `/app/vault`, `/app/commitments`, `/app/financial`, `/app/renewals`, `/app/timeline`, `/app/inbox`.
 
+Phase 13 also adds `/app/search` inside the existing authenticated shell.
+
 AI is a suggestion layer. Core app must work if AI is unavailable. AI must not access the database.
 
 ---
@@ -643,3 +650,22 @@ AI is a suggestion layer. Core app must work if AI is unavailable. AI must not a
 | 2026-10-03 | Phase 10 complete: derived Action Center on Home aggregating overdue/upcoming items. Next: Phase 11 — Timeline. |
 | 2026-10-03 | Phase 11 complete: derived Timeline chronological view (±365 days). Next: Phase 12 — Financial Commitments. |
 | 2026-10-03 | Phase 12 complete: derived financial 7/30/365 overview from ACTIVE subscriptions + recurring payments. Next: Phase 13 — Search. |
+| 2026-10-03 | Phase 13 complete: ownership-scoped search and structured Life Inbox with manual triage and Vault association. Migration `20261003100000_inbox_document_link`; 67 backend tests pass. Next: Phase 14 — AI Intelligence. |
+
+---
+
+## Phase 13 handoff (2026-10-03)
+
+- **Status:** Complete; Phase 13 implementation committed locally.
+- **Completed:** Global deterministic search with query validation, grouped typed results and existing-area navigation; structured Inbox create/list/filter/read/update/triage/delete; optional private PDF/JPEG/PNG/WEBP uploads using the existing storage service and upload limits; optional Vault document association validated against authenticated ownership; audit events for Inbox mutations; authenticated shell integration.
+- **Remaining:** Entity-specific detail routes do not exist, so search navigation opens each entity's existing feature area. Search is SQL `contains` over current domain fields with bounded result counts; no external index or ranking.
+- **Database:** Added optional `InboxItem.linkedDocumentId` relation to Document (`ON DELETE SET NULL`) and index. Migration `backend/prisma/migrations/20261003100000_inbox_document_link/migration.sql` applied to local database. Prisma client regenerated. No other schema changes.
+- **API:** `GET /api/search?q=...`; `GET/POST /api/inbox` (POST accepts structured JSON or multipart file); `GET/PATCH/DELETE /api/inbox/:id`; `GET /api/inbox/:id/download`; `PATCH /api/inbox/:id/triage`. All require the existing session authentication.
+- **Frontend:** Added `/app/search`, Search navigation entry, SearchPage, functional InboxPage. Both routes are nested beneath ProtectedRoute and AppShell.
+- **Tests:** Added `backend/src/searchInbox/searchInbox.test.ts` covering authentication, validation, empty search, entity groups, ownership isolation, Inbox CRUD/triage/filter, document association ownership, and not-found behavior.
+- **Verification:** `cd backend && npm run prisma:generate`, `npm run prisma:validate`, `npm run typecheck`, `npm run build`, `npm test`; `cd frontend && npm run typecheck`, `npm run build`. The complete backend suite passes 67/67 tests. Initial sandbox test invocation failed in Node `os.userInfo()`; the same test command outside the sandbox passed.
+- **Files created:** `backend/prisma/migrations/20261003100000_inbox_document_link/migration.sql`; `backend/src/controllers/searchInboxController.ts`; `backend/src/routes/searchInboxRoutes.ts`; `backend/src/searchInbox/searchInbox.test.ts`; `backend/src/services/inboxService.ts`; `backend/src/services/searchService.ts`; `backend/src/validators/searchInboxValidators.ts`; `frontend/src/api/searchInbox.ts`; `frontend/src/pages/SearchPage.tsx`.
+- **Files modified:** `Context.md`; `backend/prisma/schema.prisma`; `backend/src/routes/index.ts`; `frontend/src/App.tsx`; `frontend/src/components/layout/AppShell.tsx`; `frontend/src/pages/InboxPage.tsx`.
+- **Architectural decisions:** Search composes existing Prisma models in one service; inbox reuses InboxItem and its status enum, adding only the needed Vault association; private attachments use the existing FileStorageService and validated PDF/image upload path; storage keys are never returned; all domain queries carry `userId` from the authenticated request; manual triage maps to existing statuses (`UNREVIEWED`, `CATEGORIZED`, `DISMISSED`).
+- **Git:** Branch `master`; latest commit is this focused Phase 13 handoff commit (HEAD); working tree is clean after commit.
+- **Next phase:** Phase 14 — AI Intelligence.

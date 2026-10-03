@@ -8,6 +8,7 @@ import { healthRouter } from "./healthRoutes.js";
 import { purchaseRouter } from "./purchaseRoutes.js";
 import { renewalDeadlineRouter } from "./renewalDeadlineRoutes.js";
 import { timelineRouter } from "./timelineRoutes.js";
+import { searchInboxRouter } from "./searchInboxRoutes.js";
 
 export const apiRouter = Router();
 
@@ -20,3 +21,4 @@ apiRouter.use(renewalDeadlineRouter);
 apiRouter.use(actionCenterRouter);
 apiRouter.use(timelineRouter);
 apiRouter.use(financialCommitmentRouter);
+apiRouter.use(searchInboxRouter);

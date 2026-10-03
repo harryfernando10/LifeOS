@@ -7,6 +7,7 @@ import { HomePage } from "./pages/HomePage";
 import { InboxPage } from "./pages/InboxPage";
 import { LoginPage } from "./pages/LoginPage";
 import { RegisterPage } from "./pages/RegisterPage";
+import { SearchPage } from "./pages/SearchPage";
 import { RenewalsPage } from "./pages/RenewalsPage";
 import { TimelinePage } from "./pages/TimelinePage";
 import { VaultPage } from "./pages/VaultPage";
@@ -28,6 +29,7 @@ export default function App() {
           <Route path="renewals" element={<RenewalsPage />} />
           <Route path="timeline" element={<TimelinePage />} />
           <Route path="inbox" element={<InboxPage />} />
+          <Route path="search" element={<SearchPage />} />
         </Route>
       </Route>
 

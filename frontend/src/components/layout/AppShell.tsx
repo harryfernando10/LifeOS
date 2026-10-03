@@ -4,6 +4,7 @@ import { Button } from "../ui/Button";
 
 const navItems = [
   { to: "/app/home", label: "Home" },
+  { to: "/app/search", label: "Search" },
   { to: "/app/vault", label: "Vault" },
   { to: "/app/commitments", label: "Commitments" },
   { to: "/app/financial", label: "Financial" },
