@@ -2,7 +2,7 @@ import rateLimit from "express-rate-limit";
 
 /**
  * Baseline rate limit for authentication endpoints.
- * Hardening continues in Phase 19.
+ * Authentication throttling is part of the final security baseline.
  */
 export const authRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,

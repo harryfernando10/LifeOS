@@ -4,6 +4,7 @@ import express from "express";
 import helmet from "helmet";
 import { getFrontendOrigin } from "./config/env.js";
 import { errorHandler } from "./middleware/errorHandler.js";
+import { validateRequestOrigin } from "./middleware/validateRequestOrigin.js";
 import { apiRouter } from "./routes/index.js";
 
 export function createApp() {
@@ -20,6 +21,7 @@ export function createApp() {
       credentials: true,
     }),
   );
+  app.use(validateRequestOrigin);
   app.use(express.json({ limit: "32kb" }));
   app.use(cookieParser());
   app.use("/api", apiRouter);

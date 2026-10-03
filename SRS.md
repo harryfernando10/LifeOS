@@ -2,7 +2,7 @@
 
 **Document type:** Product requirements  
 **Status:** Canonical planning baseline  
-**Implementation status:** Not started  
+**Implementation status:** Requirements baseline; current implementation status is maintained in `Context.md`.
 
 This document is the product authority for LifeOS. Architectural decisions belong in `SDD.md`. Phase sequencing belongs in `DEVELOPMENT_PLAN.md`. Current work state belongs in `Context.md`.
 
@@ -278,7 +278,7 @@ IDs are stable for planning and acceptance. Priority: **MVP** unless marked **Po
 | FR-CMD-01 | A global command palette (`Ctrl+K` / `Cmd+K`) supports deterministic commands/search in the product roadmap. | Post-MVP (natural language later); deterministic search may reuse FR-SRCH-01 in MVP as specified in the development plan. |
 | FR-CMD-02 | Natural-language interpretation of commands is optional and later. | Post-MVP |
 
-Exact phase placement of the command palette UI is defined in `DEVELOPMENT_PLAN.md` (Phase 17). MVP search (Phase 13) is the functional baseline.
+The command palette is implemented in Phase 15. Search and command behavior are described in `Context.md`; the final phase sequence is maintained in `DEVELOPMENT_PLAN.md`.
 
 ### 5.13 Life Inbox
 

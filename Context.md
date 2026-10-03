@@ -2,17 +2,52 @@
 
 **Purpose:** Living implementation state for agents and developers. Read this before writing code.
 
-**Last updated:** 2026-10-03 (Phase 15 complete)
+**Last updated:** 2026-10-04 (Phase 16 release audit)
 
 ---
 
 ## Current Phase
 
-Phase 15 — Command Center + Notifications (complete)
+Phase 16 — Production Hardening + Release (checks passed; final commit and publication pending at this snapshot)
 
 ## Status
 
-Phase 15 is complete locally. Phase 14's optional AI/OCR workflows remain intact. Current branch: `master`; latest commit subject: `feat: complete phase 15 - command center and notifications`; nothing was pushed to GitHub.
+Phases 0–15 are implemented locally. Phase 16 is the final planned phase. The required checkpoint was verified before changes: `3f4893137911549f5929c275f5bda787dbc52583` (`feat: complete phase 15 - command center and notifications`) on `master`, with a clean working tree and four local commits ahead of `origin/master`. The existing remote is `https://github.com/harryfernando10/LifeOS.git`. This release snapshot was prepared before its final commit and publication; final GitHub verification is part of the release handoff. The verified checkout includes ignored local `.env` files and ignored private-storage data; neither is part of the tracked repository, and the data has been left untouched.
+
+### Final architecture and release snapshot
+
+- **Frontend:** React 19, TypeScript, Vite, React Router, Tailwind CSS. Authenticated areas include Home/Action Center, Search, Vault, Commitments, Financial Commitments, Renewals, Timeline, and Life Inbox. Command Center and notifications are mounted in the application shell.
+- **Backend:** Node.js, Express, TypeScript, Prisma, PostgreSQL. Controllers delegate to services; Prisma-backed domain data and local private storage are accessed only by the backend.
+- **Data model:** User and server-side Session; Document and DocumentVersion; Subscription and RecurringPayment; Purchase and optional one-to-one Warranty; Renewal and Deadline; InboxItem with optional owned Document association; Notification and AuditLog. Action Center, Timeline, financial overview, and notifications derive from domain records rather than a duplicate business ledger/action store.
+- **API areas:** `/api/auth`, `/api/documents` (including versions), `/api/subscriptions`, `/api/recurring-payments`, `/api/purchases` (and warranty), `/api/renewals`, `/api/deadlines`, `/api/action-center`, `/api/timeline`, `/api/financial-commitments`, `/api/search`, `/api/inbox`, `/api/ai`, and `/api/notifications`.
+- **Frontend areas:** `/app/home`, `/app/search`, `/app/vault`, `/app/commitments`, `/app/financial`, `/app/renewals`, `/app/timeline`, `/app/inbox`; authenticated application shell also provides Command Center and notification controls.
+- **AI/OCR:** Optional FastAPI service with no database access. It extracts text from PDFs or uses local Tesseract OCR for images/scanned PDFs. A configured external OpenAI-compatible provider receives extracted text for suggestions. The backend validates responses, retains ownership and write authority, and requires user confirmation for changes.
+- **Security decisions:** bcrypt password hashes; signed HTTP-only `SameSite=Lax` cookies with `Secure` in production; database-backed expiring sessions; authentication rate limits; Helmet; configured credentialed CORS plus exact-Origin validation for state-changing browser requests; user-scoped queries; generated private storage keys; upload size, extension/MIME, and signature checks; no public file serving; generic client errors for unexpected exceptions.
+- **Deployment:** no Docker or cloud deployment artifacts. Local services are run separately. Production operation requires operator-provided HTTPS, environment secrets, persistent private storage, database and file backups, and correct origin/database configuration.
+- **Environment names:** `PORT`, `FRONTEND_ORIGIN`, `DATABASE_URL`, `SESSION_SECRET`, optional `SESSION_COOKIE_NAME`, `SESSION_MAX_AGE_MS`, `PRIVATE_STORAGE_ROOT`, `MAX_UPLOAD_BYTES`, `AI_SERVICE_URL`, `AI_SERVICE_TOKEN`, `VITE_API_BASE_URL`, `AI_PROVIDER`, `AI_API_KEY`, `AI_MODEL`, `AI_API_BASE_URL`, and `TESSERACT_CMD`. Example files contain placeholders only.
+
+### Phase 16 verification record (2026-10-04)
+
+- Backend `npm test`: 78/78 passed after adding exact-Origin validation for state-changing browser requests.
+- Backend `npm run typecheck` and `npm run build`: passed.
+- `npm run prisma:validate` and `npm run prisma:generate`: passed.
+- `npm run prisma:deploy`: passed; five migrations found, none pending in the configured local database.
+- Frontend `npm run typecheck` and `npm run build`: passed. No dedicated frontend test script exists.
+- AI service `.venv\\Scripts\\python.exe -m unittest -v`: 11/11 passed. PyMuPDF emitted SWIG deprecation warnings.
+- Real OCR could not be rerun in this checkout because the Tesseract executable is not installed or discoverable. Prior Phase 14 Context notes record a synthetic Tesseract 5.5.3 verification on the earlier local setup; this does not substitute for a current runtime check.
+- `git ls-files` and the final diff were reviewed. Tracked files contain expected source, migrations, tests, examples, and docs; credential-pattern matches are limited to synthetic test passwords. Ignore checks confirmed `.env`, node_modules, builds, Python virtual environment, caches, logs, and private-storage contents are excluded. No local private files were read or staged.
+- UI reviewed from source. No obvious high-impact visual defect justified a design change; no browser-based visual review was performed in this environment.
+- Phase 16 code change: added `backend/src/middleware/validateRequestOrigin.ts` and two integration checks in `backend/src/security/origin.test.ts`; registered the guard for unsafe requests and updated the authentication rate-limit comment to remove its obsolete future-phase reference.
+
+### Final release checklist
+
+- [x] Verify expected checkpoint, branch, clean working tree, and existing remote.
+- [x] Run backend, frontend, AI-service, Prisma, and migration checks available in this environment.
+- [x] Update README and consolidate the development roadmap to Phases 0–16.
+- [x] Finish the final security, tracked-file, diff, and documentation audit.
+- [ ] Create one final commit: `chore: finalize LifeOS for release`.
+- [ ] Push `master` normally to the existing `origin` and verify local `master` matches `origin/master`.
+- [ ] Record final GitHub publication state in the release handoff.
 
 ## Completed
 
@@ -159,7 +194,7 @@ Optional vault env:
 | Password hashing | bcrypt, cost factor 12 |
 | Password rules | 8–72 characters; email trimmed + lowercased |
 | Identity on request | `req.authUser` (`id`, `email` only) — never trust client-supplied user ids |
-| CSRF | Baseline: `SameSite=Lax` cookies for same-site SPA via Vite proxy; deeper CSRF hardening deferred to Phase 19 |
+| CSRF | `SameSite=Lax` cookies plus exact-Origin validation for state-changing browser requests; requests without Origin remain available to non-browser clients |
 | Rate limiting | `express-rate-limit` on register/login (30 / 15 min) |
 | Security headers | `helmet` on the API |
 | Deferred | OAuth, email verification, password reset, MFA, social login |
@@ -606,7 +641,7 @@ Logout deletes the server session and clears the cookie.
 ## Known issues / blockers
 
 - Prisma may log expected unique-constraint errors for duplicate registration / duplicate warranty tests (handled)
-- CSRF tokens not yet implemented (SameSite=Lax baseline; Phase 19)
+- No standalone CSRF token; state-changing browser requests are protected by exact-Origin validation and `SameSite=Lax` cookies.
 - No email verification / password reset (intentionally deferred)
 
 ## Architectural decisions
@@ -623,11 +658,11 @@ Logout deletes the server session and clears the cookie.
 - Timeline is a derived chronological query over owned FR-TL-01 sources — not a stored TimelineEvent entity; ±365-day default window; no recurrence expansion (Phase 11)
 - Financial commitments overview is a derived 7/30/365 aggregation over ACTIVE subscriptions + recurring payments with interval expansion; not a budget/ledger; purchases excluded (Phase 12)
 - Search returns deterministic grouped results from existing user-owned records; result links target existing feature routes because those features do not have entity-specific routes.
-- Life Inbox uses the existing InboxItem table and statuses; documents are associated through an optional owned Vault-document foreign key. Raw file upload into Inbox is not implemented; upload a document to Vault then associate it.
+- Life Inbox uses the existing InboxItem table and statuses, stores uploaded PDF/image files in private storage, and can associate an owned Vault document.
 
-## Exact next phase
+## Historical next-phase marker
 
-**Phase 15 — Command Center + Notifications**
+The original Phase 14 handoff pointed to Phase 15. This marker is superseded by the Phase 16 release snapshot at the top of this file.
 
 ---
 

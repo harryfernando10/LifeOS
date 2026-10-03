@@ -2,7 +2,7 @@
 
 **Document type:** System design direction  
 **Status:** Canonical architecture baseline  
-**Implementation status:** Not started  
+**Implementation status:** Architecture baseline; current implementation status is maintained in `Context.md`.
 
 This document describes the intended architecture. It does **not** treat schema fields, API paths, Docker layouts, or library versions as finalized unless they are stated as canonical constraints from the product specification.
 
@@ -249,7 +249,7 @@ Direction (canonical):
 - Secrets only via environment variables.
 - `.env` never committed; `.env.example` provided.
 
-Session storage (server memory vs database vs other) is **not** finalized. CSRF strategy for cookie-based auth will be defined in Phase 3 / Phase 19 without weakening HTTP-only cookies.
+Sessions are stored in PostgreSQL. Cookie-based authentication uses HTTP-only `SameSite=Lax` cookies and exact-Origin validation for state-changing browser requests.
 
 Logout must invalidate the session/cookie.
 
@@ -448,7 +448,7 @@ AuditLog records security-relevant and significant data-changing actions. Exact 
 
 ## 18. Docker / deployment direction
 
-Phase 22 covers Docker and deployment.
+Docker and cloud deployment are not included in the final planned implementation scope. The local service setup and production operator requirements are documented in `README.md`.
 
 Direction only:
 
@@ -458,7 +458,7 @@ Direction only:
 - Secrets injected via environment, not images.
 - Hosting provider, CI vendor, and production domain are **not** finalized.
 
-Do not create Docker files until Phase 22 unless a later explicit instruction changes that.
+Do not add deployment infrastructure without a concrete project requirement.
 
 ---
 
